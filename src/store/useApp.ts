@@ -48,6 +48,8 @@ interface AppState {
   entries: Record<string, number>; // contestId -> number of user entries
   botSpeed: BotSpeed;
   brandOverride: string | null;
+  /** Draft-room haptics. On by default; the OS setting still wins. */
+  haptics: boolean;
 
   addFunds: (amount: number) => void;
   enterContest: (contestId: string) => { ok: true; draftId: string } | { ok: false; error: string };
@@ -57,6 +59,7 @@ interface AppState {
   setAutodraft: (draftId: string, on: boolean) => void;
   setBotSpeed: (s: BotSpeed) => void;
   setBrandOverride: (key: string | null) => void;
+  setHaptics: (on: boolean) => void;
   resetAll: () => void;
   tick: (now: number) => void;
 }
@@ -66,6 +69,12 @@ const BOT_NAMES = [
   'AdvanceRate', 'PlayoffStacks', 'WaiverWire', 'ChalkEater', 'FadeTheField', 'RookieFever', 'ADPValue',
   'Week17Magic', 'UpsideOnly', 'RBDeadZone', 'EliteTE', 'ShadowDrafter', 'ThreeRiver',
 ];
+
+/** Mock dollars for copy, e.g. $5 or $2.50. */
+function formatShort(n: number) {
+  const v = Math.round(n * 100) / 100;
+  return `$${Number.isInteger(v) ? v : v.toFixed(2)}`;
+}
 
 function hashString(s: string) {
   let h = 2166136261;
@@ -126,6 +135,7 @@ const initial = {
   entries: {} as Record<string, number>,
   botSpeed: 'normal' as BotSpeed,
   brandOverride: null as string | null,
+  haptics: true,
 };
 
 export const useApp = create<AppState>()(
@@ -139,13 +149,13 @@ export const useApp = create<AppState>()(
       enterContest: (contestId) => {
         const s = get();
         // Entering before persisted state loads would be overwritten by rehydration.
-        if (!s.hydrated) return { ok: false, error: 'Still loading your account — try again' };
+        if (!s.hydrated) return { ok: false, error: 'One sec, still loading.' };
         const c = contestById(contestId);
         if (!c) return { ok: false, error: 'Contest not found' };
         const mine = s.entries[c.id] ?? 0;
         if (mine >= c.maxPerUser) return { ok: false, error: `Max ${c.maxPerUser} entries reached` };
         if (c.filled + mine >= c.maxEntries) return { ok: false, error: 'Contest is full' };
-        if (s.balance < c.entryFee) return { ok: false, error: 'Not enough mock balance — add funds in Account' };
+        if (s.balance < c.entryFee) return { ok: false, error: `You're ${formatShort(c.entryFee - s.balance)} short (mock). Top up in You.` };
 
         const now = Date.now();
         // Two entries in the same millisecond must not share (and overwrite) one draft.
@@ -183,7 +193,9 @@ export const useApp = create<AppState>()(
         // The ticker may not have run yet: an expired clock belongs to the autopick.
         if (isMyTurn(d) && d.state.clockEndsAt !== null && now >= d.state.clockEndsAt) {
           get().tick(now);
-          return "Time's up — your pick was made automatically";
+          const auto = get().drafts[draftId]?.state.picks.filter((p) => p.entrantId === ME).pop();
+          const who = auto ? PLAYERS.find((p) => p.id === auto.playerId)?.name : undefined;
+          return who ? `Clock ran out. Autopick took ${who}.` : 'Clock ran out. Autopick made the pick.';
         }
         try {
           const state = makePick(d.state, ME, playerId, { now });
@@ -196,7 +208,7 @@ export const useApp = create<AppState>()(
           }));
           return null;
         } catch (e) {
-          return e instanceof Error ? e.message : 'Pick failed';
+          return e instanceof Error ? e.message : "That pick didn't go through. Try again.";
         }
       },
 
@@ -227,6 +239,7 @@ export const useApp = create<AppState>()(
 
       setBotSpeed: (botSpeed) => set({ botSpeed }),
       setBrandOverride: (brandOverride) => set({ brandOverride }),
+      setHaptics: (haptics) => set({ haptics }),
       resetAll: () => set({ ...initial }),
 
       tick: (now) => {
@@ -255,6 +268,7 @@ export const useApp = create<AppState>()(
         entries: s.entries,
         botSpeed: s.botSpeed,
         brandOverride: s.brandOverride,
+        haptics: s.haptics,
       }),
       // Called after hydration finishes (success or error); defer so `useApp` is defined.
       onRehydrateStorage: () => () => {

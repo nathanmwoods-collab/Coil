@@ -92,3 +92,63 @@ export function exposureFor(drafts: DraftEntry[]): ExposureWithDollars[] {
   });
   return exposure(teams, PLAYER_BY_ID).map((r) => ({ ...r, dollars: dollars.get(r.player.id) ?? 0 }));
 }
+
+export type BuildName = 'Zero RB' | 'Hero RB' | 'Robust RB' | 'Balanced';
+
+export interface TeamIdentity {
+  build: BuildName;
+  /** e.g. "Hurts + A.J. Brown", or null with no QB stack. */
+  stack: string | null;
+  counts: Record<'QB' | 'RB' | 'WR' | 'TE', number>;
+  /** One wry line about how the team was built. */
+  line: string;
+}
+
+const lastName = (full: string) => {
+  const parts = full.split(' ').filter((w) => !/^(jr\.?|sr\.?|ii|iii|iv|v)$/i.test(w));
+  return parts[parts.length - 1] ?? full;
+};
+
+/** The "Your coil" card: a build name, your best stack and one wry line, all from the roster. */
+export function teamIdentity(state: DraftEntry['state'], entrantId: string = ME): TeamIdentity {
+  const picks = rosterOf(state, entrantId)
+    .map((p) => ({ pick: p, player: PLAYER_BY_ID.get(p.playerId) }))
+    .filter((x): x is { pick: typeof x.pick; player: Player } => !!x.player);
+
+  const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const x of picks) counts[x.player.position]++;
+
+  const earlyRb = picks.filter((x) => x.pick.round <= 6 && x.player.position === 'RB').length;
+  const build: BuildName = earlyRb === 0 ? 'Zero RB' : earlyRb === 1 ? 'Hero RB' : earlyRb >= 3 ? 'Robust RB' : 'Balanced';
+
+  let stack: string | null = null;
+  let bestScore = -1;
+  for (const qb of picks.filter((x) => x.player.position === 'QB')) {
+    const mates = picks
+      .filter((x) => (x.player.position === 'WR' || x.player.position === 'TE') && x.player.team === qb.player.team)
+      .sort((a, b) => a.player.adp - b.player.adp);
+    if (!mates.length) continue;
+    const score = mates.length * 1000 - mates[0].player.adp;
+    if (score > bestScore) {
+      bestScore = score;
+      stack = [lastName(qb.player.name), ...mates.slice(0, 2).map((m) => m.player.name)].join(' + ');
+    }
+  }
+
+  const reaches = picks.filter((x) => x.pick.overall < x.player.adp - 12).length;
+  const values = picks.filter((x) => x.pick.overall > x.player.adp + 12).length;
+  const line =
+    reaches >= 4
+      ? 'Took your guys. ADP can deal with it.'
+      : values >= 4
+        ? 'Let the room hand you value all day.'
+        : build === 'Zero RB'
+          ? 'Let everyone else pay for running backs.'
+          : build === 'Robust RB'
+            ? 'Bought the whole backfield early. Bold.'
+            : build === 'Hero RB'
+              ? 'One anchor back, then all the swings.'
+              : 'Took the chalk early and the swings late.';
+
+  return { build, stack, counts, line };
+}

@@ -78,7 +78,7 @@ describe('draft clock', () => {
     get().toggleQueue(id, avail[1]);
     const n = d.state.picks.length;
     const late = d.state.clockEndsAt! + 1;
-    expect(get().draftPlayer(id, avail[0], late)).toMatch(/Time's up/);
+    expect(get().draftPlayer(id, avail[0], late)).toMatch(/^Clock ran out\. Autopick took /);
     const after = draft(id);
     expect(after.state.picks).toHaveLength(n + 1);
     expect(after.state.picks[n]).toMatchObject({ entrantId: ME, playerId: avail[1], auto: true });

@@ -1,4 +1,6 @@
 // Brand directions for the app. Dark-mode-first.
+// Color roles (personality spec §2.8): `primary` (violet) means "you" and your draft path;
+// `accent` (mint #2EE6C5) is release and action: the one CTA per screen, the on-the-clock pulse.
 // See /mnt/project-files/bestball/brand-options.md for rationale and availability notes.
 
 export type BrandColors = {
@@ -44,7 +46,7 @@ export const BRANDS = {
       warning: '#FFB547',
       danger: '#FF5D5D',
       QB: '#FF6B9A',
-      RB: '#3BD9A0',
+      RB: '#4CC38A',
       WR: '#5AB0FF',
       TE: '#FFA24C',
     },
