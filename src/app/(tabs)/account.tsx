@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Check, ChevronRight } from '../../components/icons';
 import { Button, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
+import { SEASON_WEEKS } from '../../data';
 import { useApp } from '../../store/useApp';
 import { ACTIVE_BRAND, BRANDS } from '../../theme/brands';
 import { fonts, type } from '../../theme/type';
@@ -23,6 +24,8 @@ export default function Account() {
   const setHaptics = useApp((st) => st.setHaptics);
   const resetAll = useApp((st) => st.resetAll);
   const drafts = useApp((st) => st.drafts);
+  const week = useApp((st) => st.currentWeek);
+  const setWeek = useApp((st) => st.setWeek);
   const [lab, setLab] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const stats = useMemo(() => {
@@ -92,6 +95,15 @@ export default function Account() {
           </Tap>
           {lab ? (
             <View style={{ gap: 8, paddingVertical: 12 }}>
+              <View style={s.weekRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rowLabel}>Season week (mock)</Text>
+                  <Text style={s.hint}>{week === 0 ? 'Preseason.' : week >= SEASON_WEEKS ? 'Season over. Results are final.' : `Live standings run through week ${week}.`}</Text>
+                </View>
+                <Button small variant="secondary" label="Back" disabled={week <= 0} onPress={() => setWeek(week - 1)} testID="week-back" />
+                <Text style={s.weekValue} testID="week-value">{week}</Text>
+                <Button small variant="secondary" label="Advance" disabled={week >= SEASON_WEEKS} onPress={() => setWeek(week + 1)} testID="week-advance" />
+              </View>
               <Text style={s.hint}>Theme preview, for the team. Only changes this device.</Text>
               {(Object.keys(BRANDS) as BrandKey[]).map((k) => {
                 const b = BRANDS[k];
@@ -174,6 +186,8 @@ const useStyles = makeStyles((c) => ({
   hint: { ...type.small, color: c.textMuted },
   track: { width: 44, height: 26, borderRadius: 13, padding: 3, justifyContent: 'center' },
   knob: { width: 20, height: 20, borderRadius: 10 },
+  weekRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
+  weekValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: c.text, minWidth: 30, textAlign: 'center' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, borderRadius: 14, borderWidth: 1, minHeight: 60 },
   confirm: { gap: 12, padding: 16, borderRadius: 18, backgroundColor: c.surface },
   confirmText: { ...type.bodyStrong, color: c.text },

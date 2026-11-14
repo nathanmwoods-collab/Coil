@@ -1,17 +1,20 @@
-import { PLAYER_MAP, PLAYERS, simulateSeason, simulateTournament } from '../data';
+import { payoutTable, PLAYER_MAP, PLAYERS, SEASON_WEEKS, simulateSeason, simulateTournament } from '../data';
 import {
   exposure,
+  isAdvancing,
   optimalLineup,
+  podStandings,
+  winningAt,
   rosterOf,
   rosterPlayers,
   type ExposureRow,
   type Player,
   type WeekLineup,
 } from '../engine';
-import { ME, type DraftEntry } from './useApp';
+import { contestById, ME, teamName, type DraftEntry } from './useApp';
 
 export const PLAYER_BY_ID: Map<string, Player> = PLAYER_MAP;
-export const SEASON_WEEKS = 17;
+export { SEASON_WEEKS };
 
 export interface Standing {
   entrantId: string;
@@ -151,4 +154,50 @@ export function teamIdentity(state: DraftEntry['state'], entrantId: string = ME)
               : 'Took the chalk early and the swings late.';
 
   return { build, stack, counts, line };
+}
+
+export interface LiveTeam {
+  id: string;
+  contestId: string;
+  name: string;
+  fee: number;
+  /** Rank in the pod through the current week; null before week 1. */
+  rank: number | null;
+  of: number;
+  points: number;
+  /** MOCK amount this team would win if the season ended now. */
+  winning: number;
+  advancing: boolean;
+  counts: Record<'QB' | 'RB' | 'WR' | 'TE', number>;
+  createdAt: number;
+}
+
+const countsCache = new Map<string, LiveTeam['counts']>();
+
+/** A completed draft as it stands after `week` weeks of its simulated season. */
+export function liveTeam(d: DraftEntry, week: number): LiveTeam {
+  const r = draftResult(d);
+  const mine = podStandings(r.standings, week).find((l) => l.entrantId === ME);
+  const contest = contestById(d.contestId);
+  const table = contest ? payoutTable(contest) : { places: [], advance: 0 };
+  let counts = countsCache.get(d.id);
+  if (!counts) {
+    counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+    for (const p of r.roster) counts[p.position]++;
+    countsCache.set(d.id, counts);
+  }
+  const rank = mine?.rank ?? null;
+  return {
+    id: d.id,
+    contestId: d.contestId,
+    name: teamName(d),
+    fee: d.entryFee,
+    rank,
+    of: d.state.config.teams,
+    points: mine?.points ?? 0,
+    winning: winningAt(rank, table),
+    advancing: isAdvancing(rank, table),
+    counts,
+    createdAt: d.createdAt,
+  };
 }

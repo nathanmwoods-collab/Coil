@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { CONTESTS, PLAYERS } from '../data';
+import { CONTESTS, DEFAULT_WEEK, PLAYERS, SEASON_WEEKS } from '../data';
 import { depositBonus } from '../data/promos';
 import {
   autoPickPlayer,
@@ -45,6 +45,10 @@ export interface DraftEntry {
   missed: number;
   /** Turned on by the system after repeated missed picks (slow drafts). */
   autopilot: boolean;
+  /** 1-based number of this entry among the user's entries in its contest. */
+  entryNo?: number;
+  /** User-given team name. Falls back to "Entry N". */
+  name?: string;
   /** Entered as "autodraft from my rankings": runs to completion in the background, no pick clocks. */
   background?: boolean;
 }
@@ -78,7 +82,11 @@ interface AppState {
   /** Personal rankings per draft type. Missing means "same as ADP". */
   rankings: Partial<Record<DraftType, Rankings>>;
 
+  /** MOCK season clock: completed weeks, 0 to 17. Moved from Lab. */
+  currentWeek: number;
+
   addFunds: (amount: number) => void;
+  setWeek: (week: number) => void;
   /** Apply an edit (move, exclude, tier break) to one draft type's rankings. */
   editRankings: (type: DraftType, edit: (r: Rankings) => Rankings) => void;
   resetRankings: (type: DraftType) => void;
@@ -194,6 +202,7 @@ const initial = {
   brandOverride: null as string | null,
   haptics: true,
   matchUsed: false,
+  currentWeek: DEFAULT_WEEK,
   rankings: {} as Partial<Record<DraftType, Rankings>>,
 };
 
@@ -204,6 +213,8 @@ export const useApp = create<AppState>()(
       ...initial,
 
       addFunds: (amount) => set((s) => ({ balance: Math.round((s.balance + amount) * 100) / 100 })),
+
+      setWeek: (week) => set({ currentWeek: Math.max(0, Math.min(SEASON_WEEKS, Math.round(week))) }),
 
       editRankings: (type, edit) =>
         set((s) => {
@@ -265,7 +276,7 @@ export const useApp = create<AppState>()(
           );
           drafts[id] = {
             id, contestId: c.id, entryFee: c.entryFee, createdAt: now + k, seed, state,
-            queue: [], autodraft: !!opts.autodraft, missed: 0, autopilot: false,
+            queue: [], autodraft: !!opts.autodraft, missed: 0, autopilot: false, entryNo: mine + k + 1,
             ...(opts.autodraft ? { background: true } : {}),
           };
           draftIds.push(id);
@@ -371,6 +382,7 @@ export const useApp = create<AppState>()(
         haptics: s.haptics,
         matchUsed: s.matchUsed,
         rankings: s.rankings,
+        currentWeek: s.currentWeek,
       }),
       // Called after hydration finishes (success or error); defer so `useApp` is defined.
       onRehydrateStorage: () => () => {
@@ -379,6 +391,11 @@ export const useApp = create<AppState>()(
     },
   ),
 );
+
+/** Team name shown everywhere: the user's name for it, else "Entry N". */
+export function teamName(d: Pick<DraftEntry, 'name' | 'entryNo'>): string {
+  return d.name?.trim() || (d.entryNo ? `Entry ${d.entryNo}` : 'Entry');
+}
 
 export function isMyTurn(d: DraftEntry | undefined) {
   if (!d) return false;
