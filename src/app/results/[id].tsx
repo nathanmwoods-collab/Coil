@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { ChevronLeft } from '../../components/icons';
+import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { Button, Empty, formatPts, ordinal, PosPill, Screen, Segmented, Tap, WindingUp } from '../../components/ui';
 import { feel } from '../../lib/feel';
 import { draftResult, PLAYER_BY_ID, seasonFor } from '../../store/results';
@@ -129,6 +130,7 @@ export default function Results() {
               return (
                 <View style={[s.row, !item.counted && s.benched]}>
                   <Text style={[s.slot, item.counted && { color: c.text }]}>{item.slot}</Text>
+                  <PlayerAvatar player={p} size={28} dim={!item.counted} />
                   <PosPill pos={p.position} small />
                   <Text style={[s.name, !item.counted && { color: c.textMuted }]} numberOfLines={1}>
                     {p.name}
@@ -167,6 +169,7 @@ export default function Results() {
           ListHeaderComponent={<Text style={s.weekHead}>How often each guy made your lineup</Text>}
           renderItem={({ item: p }) => (
             <View style={s.row}>
+              <PlayerAvatar player={p} size={28} />
               <PosPill pos={p.position} small />
               <Text style={s.name} numberOfLines={1}>
                 {p.name}

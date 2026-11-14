@@ -6,6 +6,7 @@ import { feel } from '../../lib/feel';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 import { QueueMark } from '../icons';
+import { PlayerAvatar } from '../PlayerAvatar';
 import { PosPill, Tap } from '../ui';
 
 export type StackTag = 'QB stack' | 'Stack' | null;
@@ -47,6 +48,7 @@ export const PlayerRow = memo(function PlayerRow({
       >
         <QueueMark color={c.textMuted} filled={queued} fill={c.accent} size={20} />
       </Tap>
+      <PlayerAvatar player={player} size={36} />
       <View style={s.main}>
         <View style={s.nameRow}>
           <PosPill pos={player.position} small />
@@ -90,8 +92,8 @@ const useStyles = makeStyles((c) => ({
     borderBottomColor: c.border + '99',
     backgroundColor: c.bg,
   },
-  star: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  main: { flex: 1, gap: 3, minWidth: 0 },
+  star: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  main: { flex: 1, gap: 3, minWidth: 0, marginLeft: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { ...type.bodyStrong, color: c.text, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

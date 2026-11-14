@@ -1,8 +1,13 @@
 export type Position = 'QB' | 'RB' | 'WR' | 'TE';
 export const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
 
+/** Sports the app knows about. Only NFL has data today. */
+export type Sport = 'nfl' | 'nba' | 'mlb';
+
 export interface Player {
   id: string;
+  /** Defaults to 'nfl' when absent. */
+  sport?: Sport;
   name: string;
   team: string; // NFL team abbreviation
   position: Position;

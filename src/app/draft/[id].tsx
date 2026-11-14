@@ -16,6 +16,7 @@ import { PLAYERS } from '../../data';
 import { onTheClock, picksUntilTurn, rosterPlayers, roundOf, totalPicks, type Player, type Position } from '../../engine';
 import { botLine } from '../../lib/banter';
 import { announce, feel } from '../../lib/feel';
+import { searchPlayers } from '../../lib/search';
 import { exposureFor, PLAYER_BY_ID } from '../../store/results';
 import { contestById, ME, useApp, type DraftEntry } from '../../store/useApp';
 import { useReducedMotion } from '../../theme/motion';
@@ -140,14 +141,11 @@ function Room({ d }: { d: DraftEntry }) {
   }, [doneKey]);
 
   const available = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const list = PLAYERS.filter(
-      (p) =>
-        !taken.has(p.id) &&
-        (pos === 'All' || p.position === pos) &&
-        (!needle || p.name.toLowerCase().includes(needle) || p.team.toLowerCase() === needle),
+    const pool = PLAYERS.filter((p) => !taken.has(p.id) && (pos === 'All' || p.position === pos)).sort(
+      sort === 'adp' ? (a, b) => a.adp - b.adp : (a, b) => b.projPoints - a.projPoints,
     );
-    return list.sort(sort === 'adp' ? (a, b) => a.adp - b.adp : (a, b) => b.projPoints - a.projPoints);
+    // Search keeps the sort, with exact matches ("cmc", "eagles wr") leading.
+    return searchPlayers(q, pool);
   }, [taken, pos, sort, q]);
 
   const onDraft = useCallback(
@@ -315,7 +313,7 @@ function Room({ d }: { d: DraftEntry }) {
               <TextInput
                 value={q}
                 onChangeText={setQ}
-                placeholder="Search"
+                placeholder="Name, team or nickname"
                 placeholderTextColor={c.textMuted}
                 style={s.search}
                 autoCorrect={false}

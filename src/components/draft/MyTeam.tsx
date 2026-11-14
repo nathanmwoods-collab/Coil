@@ -5,6 +5,7 @@ import { POSITIONS, rosterOf, type DraftState, type Player, type Position } from
 import { ME } from '../../store/useApp';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
+import { PlayerAvatar } from '../PlayerAvatar';
 import { Empty, PosPill } from '../ui';
 
 /** Typical best-ball build ranges for an 18-round draft, scaled to the draft's rounds. */
@@ -68,6 +69,7 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
           <Text style={s.pickNo}>
             {item.pick.round}.{String(item.pick.pickInRound).padStart(2, '0')}
           </Text>
+          <PlayerAvatar player={item.player} size={32} />
           <View style={{ flex: 1 }}>
             <Text style={s.name}>{item.player.name}</Text>
             <Text style={s.meta}>
@@ -94,7 +96,7 @@ const useStyles = makeStyles((c) => ({
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
   sectionText: { ...type.micro, color: c.textMuted, fontSize: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.border + '99' },
-  pickNo: { fontFamily: fonts.mono, color: c.textMuted, fontSize: 12, width: 40 },
+  pickNo: { fontFamily: fonts.mono, color: c.textMuted, fontSize: 12, width: 36 },
   name: { ...type.bodyStrong, color: c.text },
   meta: { ...type.micro, color: c.textMuted, fontSize: 12 },
   proj: { fontFamily: fonts.mono, fontSize: 13, color: c.text },
