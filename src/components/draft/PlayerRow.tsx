@@ -62,11 +62,15 @@ export const PlayerRow = memo(function PlayerRow({
           </Text>
         </View>
         <View style={s.metaRow}>
-          <Text style={s.meta}>
+          <Text style={[s.meta, { flexShrink: 1 }]} numberOfLines={1}>
             {player.team} · Bye {player.bye} · {Math.round(player.projPoints)} proj
           </Text>
           {stack ? <Text style={[s.tag, { color: stack === 'QB stack' ? c.primary : c.textMuted }]}>{stack}</Text> : null}
-          {exposurePct ? <Text style={s.meta}>· {Math.round(exposurePct)}% exp</Text> : null}
+          {exposurePct ? (
+            <Text style={[s.meta, { flexShrink: 0 }]} numberOfLines={1}>
+              · {Math.round(exposurePct)}% exp
+            </Text>
+          ) : null}
         </View>
       </View>
       <View

@@ -29,7 +29,7 @@ const cache = new WeakMap<Player, Entry>();
 function entryFor(p: Player): Entry {
   let e = cache.get(p);
   if (e) return e;
-  const sport = p.sport ?? 'nfl';
+  const sport = p.sport;
   const team = teamInfo(p.team, sport);
   const phrases = [
     p.name,

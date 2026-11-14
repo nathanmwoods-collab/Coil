@@ -25,7 +25,7 @@ export const PlayerAvatar = memo(function PlayerAvatar({ player, size = 36, dim 
   const c = useColors();
   const url = photoUrl(player);
   const [failed, setFailed] = useState<string | null>(null);
-  const team = teamInfo(player.team, player.sport ?? 'nfl');
+  const team = teamInfo(player.team, player.sport);
   const fill = team?.color ?? c.surfaceAlt;
   const ring = team?.alt ?? c.border;
   const showPhoto = !!url && failed !== url;

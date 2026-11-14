@@ -23,5 +23,5 @@ export function runBotDraft(players: Player[], seed = 1, teams = 12, rounds = 18
 }
 
 export function mk(id: string, position: Player['position'], adp: number, projPoints = 100): Player {
-  return { id, name: id, team: 'XX', position, bye: 7, adp, projPoints };
+  return { id, sport: 'nfl', name: id, team: 'XX', position, bye: 7, adp, projPoints };
 }

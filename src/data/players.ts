@@ -9,7 +9,7 @@
  */
 import type { Player } from '../engine/types';
 
-export const PLAYERS: Player[] = [
+const NFL_RAW: Omit<Player, 'sport'>[] = [
   { id: "p_ja_chase", name: "Ja'Marr Chase", team: 'CIN', position: 'WR', bye: 10, adp: 1.3, projPoints: 299.3 },
   { id: "p_bi_robinson", name: "Bijan Robinson", team: 'ATL', position: 'RB', bye: 5, adp: 2.6, projPoints: 310.3 },
   { id: "p_ja_gibbs", name: "Jahmyr Gibbs", team: 'DET', position: 'RB', bye: 8, adp: 3.2, projPoints: 301.4 },
@@ -272,3 +272,9 @@ export const PLAYERS: Player[] = [
   { id: "p_dy_brown", name: "Dyami Brown", team: 'JAX', position: 'WR', bye: 8, adp: 260.2, projPoints: 65.6 },
   { id: "p_gr_dortch", name: "Greg Dortch", team: 'ARI', position: 'WR', bye: 8, adp: 261.2, projPoints: 61.5 },
 ];
+
+/** The NFL pool. Other sports get their own file and an entry in `sports.ts`. */
+export const NFL_PLAYERS: Player[] = NFL_RAW.map((p) => ({ ...p, sport: 'nfl' }));
+
+/** The active (only populated) sport's pool. Prefer `playersFor(sport)` in new code. */
+export const PLAYERS: Player[] = NFL_PLAYERS;

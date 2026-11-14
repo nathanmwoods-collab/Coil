@@ -1,7 +1,9 @@
 import type { Player } from '../engine/types';
 import { PLAYERS } from './players';
 
-export { PLAYERS } from './players';
+export { NFL_PLAYERS, PLAYERS } from './players';
+export { contestsFor, DEFAULT_SPORT, isSportLive, playerMapFor, playersFor, sportInfo, SPORTS } from './sports';
+export type { SportInfo } from './sports';
 export { CONTESTS, FAST_CLOCK_SEC, SLOW_CLOCK_SEC, isSitAndGo } from './contests';
 export { DEFAULT_WEEK, payoutBlurb, payoutTable, SEASON_WEEKS } from './payouts';
 export { simulateSeason, simulateTournament } from './sim';

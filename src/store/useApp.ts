@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { CONTESTS, DEFAULT_WEEK, PLAYERS, SEASON_WEEKS } from '../data';
+import { CONTESTS, DEFAULT_SPORT, DEFAULT_WEEK, PLAYERS, playersFor, SEASON_WEEKS } from '../data';
 import { depositBonus } from '../data/promos';
 import {
   adpValue,
@@ -214,6 +214,8 @@ function stepDraft(
   rankings: Partial<Record<DraftType, Rankings>> = {},
 ): DraftEntry | null {
   const st = d.state;
+  // The pool comes from the contest's sport, so a new sport needs no changes here.
+  const pool = playersFor(contestById(d.contestId)?.sport ?? DEFAULT_SPORT);
   if (st.status !== 'drafting') return null;
   const clock = onTheClock(st);
   if (!clock) return null;
@@ -224,7 +226,7 @@ function stepDraft(
   if (clock.isBot) {
     if (now - lastAt < botDelay) return null;
     const rand = mulberry32(d.seed + st.picks.length * 7919);
-    const pl = botPickPlayer(st, clock.id, PLAYERS, rand) ?? autoPickPlayer(st, clock.id, PLAYERS);
+    const pl = botPickPlayer(st, clock.id, pool, rand) ?? autoPickPlayer(st, clock.id, pool);
     if (!pl) return null;
     const queue = d.queue.includes(pl.id) ? d.queue.filter((q) => q !== pl.id) : d.queue;
     return { ...d, state: makePick(st, clock.id, pl.id, { auto: true, now }), queue };
@@ -236,7 +238,7 @@ function stepDraft(
   const autoReady = auto && now - lastAt >= Math.min(botDelay, 700);
   if (!expired && !autoReady) return null;
   // Autopick order: this draft's queue, then the user's rankings for this draft type, then ADP.
-  const pl = autoPickPlayer(st, clock.id, PLAYERS, autopickOrder(d.queue, rankings[draftTypeFor(d)]));
+  const pl = autoPickPlayer(st, clock.id, pool, autopickOrder(d.queue, rankings[draftTypeFor(d)]));
   if (!pl) return null;
   const state = makePick(st, clock.id, pl.id, { auto: true, now });
   const missed = !auto && expired ? d.missed + 1 : d.missed;

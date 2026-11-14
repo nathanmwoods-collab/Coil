@@ -4,8 +4,8 @@ import { FlatList, Image, Text, View } from 'react-native';
 
 import { ContestCard } from '../../components/ContestCard';
 import { PromoRail } from '../../components/PromoRail';
-import { Button, Chip, clockLabel, clockSpeed, formatMoney, Screen } from '../../components/ui';
-import { CONTESTS } from '../../data';
+import { Button, Chip, clockLabel, clockSpeed, formatMoney, Screen, Tap } from '../../components/ui';
+import { CONTESTS, contestsFor, DEFAULT_SPORT, SPORTS, type SportInfo } from '../../data';
 import type { Contest } from '../../engine';
 import { useApp } from '../../store/useApp';
 import { BRANDS } from '../../theme/brands';
@@ -30,13 +30,16 @@ export default function Lobby() {
   const entries = useApp((st) => st.entries);
   const matchUsed = useApp((st) => st.matchUsed);
   const [filter, setFilter] = useState<Filter>('All');
+  // Only live sports can be selected; a "soon" chip explains itself instead.
+  const [sport] = useState(DEFAULT_SPORT);
+  const [soon, setSoon] = useState<SportInfo | null>(null);
 
   const { featured, rest } = useMemo(() => {
-    const sorted = [...CONTESTS].sort((a, b) => b.prizePool - a.prizePool);
+    const sorted = [...contestsFor(sport)].sort((a, b) => b.prizePool - a.prizePool);
     const flagship = sorted.find((x) => x.tag === 'flagship') ?? sorted[0];
     const others = sorted.filter((x) => x !== flagship && (filter === 'All' || clockSpeed(x.pickClockSec) === filter));
     return { featured: flagship, rest: others };
-  }, [filter]);
+  }, [filter, sport]);
 
   const open = useCallback((id: string) => router.push(`/contest/${id}`), []);
 
@@ -72,6 +75,33 @@ export default function Lobby() {
         ListHeaderComponent={
           <View style={{ gap: 18, marginBottom: 12 }}>
             <Text style={s.tagline}>{brand.tagline}</Text>
+            <View style={{ gap: 8 }}>
+              <View style={s.sports} accessibilityRole="tablist">
+                {SPORTS.map((sp) =>
+                  sp.status === 'live' ? (
+                    <Chip key={sp.key} label={sp.label} active={sp.key === sport} onPress={() => setSoon(null)} />
+                  ) : (
+                    <Tap
+                      key={sp.key}
+                      testID={`sport-${sp.key}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${sp.label}, coming soon`}
+                      accessibilityState={{ expanded: soon?.key === sp.key }}
+                      onPress={() => setSoon(soon?.key === sp.key ? null : sp)}
+                      style={[s.soonChip, soon?.key === sp.key && { borderColor: c.textMuted }]}
+                    >
+                      <Text style={s.soonLabel}>{sp.label}</Text>
+                      <Text style={s.soonTag}>soon</Text>
+                    </Tap>
+                  ),
+                )}
+              </View>
+              {soon ? (
+                <Text style={s.soonNote} testID="sport-soon-note" accessibilityLiveRegion="polite">
+                  {soon.soonNote}
+                </Text>
+              ) : null}
+            </View>
             <PromoRail hide={matchUsed ? ['first-draft-match'] : undefined} />
             {featured ? (
               <ContestCard contest={featured} featured myEntries={entries[featured.id] ?? 0} onPress={() => open(featured.id)} />
@@ -105,6 +135,11 @@ const useStyles = makeStyles((c) => ({
   balanceLabel: { ...type.micro, color: c.warning },
   balanceValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: c.text },
   money: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sports: { flexDirection: 'row', gap: 6 },
+  soonChip: { minHeight: 34, paddingHorizontal: 13, borderRadius: 17, borderWidth: 1, borderColor: c.border, borderStyle: 'dashed', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  soonLabel: { fontFamily: fonts.strong, fontSize: 13, color: c.textMuted },
+  soonTag: { ...type.micro, fontSize: 10, color: c.textMuted },
+  soonNote: { ...type.small, color: c.textMuted },
   list: { padding: 16, paddingTop: 8, paddingBottom: 32 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   section: { ...type.display24, color: c.text },

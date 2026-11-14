@@ -11,7 +11,7 @@ import type { Contest } from '../engine/types';
 export const FAST_CLOCK_SEC = 30;
 export const SLOW_CLOCK_SEC = 8 * 60 * 60;
 
-export const CONTESTS: Contest[] = [
+const NFL_CONTESTS: Omit<Contest, 'sport'>[] = [
   {
     id: 'c_gridiron_gauntlet',
     name: 'The Gridiron Gauntlet',
@@ -124,6 +124,9 @@ export const CONTESTS: Contest[] = [
     startsAt: '2026-09-10T00:20:00Z',
   },
 ];
+
+/** Every contest, all sports. Use `contestsFor(sport)` for one sport's lobby. */
+export const CONTESTS: Contest[] = [...NFL_CONTESTS.map((c): Contest => ({ ...c, sport: 'nfl' }))];
 
 /** A Sit & Go room is a single-draft contest: it holds exactly one draft's worth of teams. */
 export function isSitAndGo(c: Contest): boolean {

@@ -319,7 +319,7 @@ function Room({ d }: { d: DraftEntry }) {
               <TextInput
                 value={q}
                 onChangeText={setQ}
-                placeholder="Name, team or nickname"
+                placeholder="Search"
                 placeholderTextColor={c.textMuted}
                 style={s.search}
                 autoCorrect={false}

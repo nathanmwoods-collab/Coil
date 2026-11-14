@@ -6,8 +6,7 @@ export type Sport = 'nfl' | 'nba' | 'mlb';
 
 export interface Player {
   id: string;
-  /** Defaults to 'nfl' when absent. */
-  sport?: Sport;
+  sport: Sport;
   name: string;
   team: string; // NFL team abbreviation
   position: Position;
@@ -64,6 +63,7 @@ export interface DraftState {
 
 export interface Contest {
   id: string;
+  sport: Sport;
   name: string;
   entryFee: number; // display only; mock currency
   prizePool: number;
