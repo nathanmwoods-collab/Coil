@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { CONTESTS, PLAYERS } from '../data';
+import { depositBonus } from '../data/promos';
 import {
   autoPickPlayer,
   botPickPlayer,
@@ -51,7 +52,12 @@ interface AppState {
   /** Draft-room haptics. On by default; the OS setting still wins. */
   haptics: boolean;
 
+  /** The one-time first-deposit match has been paid out. */
+  matchUsed: boolean;
+
   addFunds: (amount: number) => void;
+  /** Mock deposit: adds the amount plus any first-deposit match. Returns the bonus. */
+  deposit: (amount: number) => number;
   enterContest: (contestId: string) => { ok: true; draftId: string } | { ok: false; error: string };
   draftPlayer: (draftId: string, playerId: string, now?: number) => string | null;
   toggleQueue: (draftId: string, playerId: string) => void;
@@ -136,6 +142,7 @@ const initial = {
   botSpeed: 'normal' as BotSpeed,
   brandOverride: null as string | null,
   haptics: true,
+  matchUsed: false,
 };
 
 export const useApp = create<AppState>()(
@@ -145,6 +152,14 @@ export const useApp = create<AppState>()(
       ...initial,
 
       addFunds: (amount) => set((s) => ({ balance: Math.round((s.balance + amount) * 100) / 100 })),
+
+      deposit: (amount) => {
+        const s = get();
+        if (!(amount > 0)) return 0;
+        const bonus = depositBonus(amount, s.matchUsed);
+        set({ balance: Math.round((s.balance + amount + bonus) * 100) / 100, matchUsed: true });
+        return bonus;
+      },
 
       enterContest: (contestId) => {
         const s = get();
@@ -269,6 +284,7 @@ export const useApp = create<AppState>()(
         botSpeed: s.botSpeed,
         brandOverride: s.brandOverride,
         haptics: s.haptics,
+        matchUsed: s.matchUsed,
       }),
       // Called after hydration finishes (success or error); defer so `useApp` is defined.
       onRehydrateStorage: () => () => {

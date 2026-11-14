@@ -144,3 +144,12 @@ describe('exposure across drafts', () => {
     expect(rows.reduce((n, r) => n + r.count, 0)).toBe(18 * 3);
   });
 });
+
+describe('mock deposit', () => {
+  it('matches the first deposit only', () => {
+    expect(get().deposit(25)).toBe(25);
+    expect(get().balance).toBe(STARTING_BALANCE + 50);
+    expect(get().deposit(100)).toBe(0);
+    expect(get().balance).toBe(STARTING_BALANCE + 150);
+  });
+});

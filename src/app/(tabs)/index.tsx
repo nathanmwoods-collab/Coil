@@ -3,7 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Image, Text, View } from 'react-native';
 
 import { ContestCard } from '../../components/ContestCard';
-import { Chip, clockLabel, clockSpeed, formatMoney, Screen } from '../../components/ui';
+import { PromoRail } from '../../components/PromoRail';
+import { Button, Chip, clockLabel, clockSpeed, formatMoney, Screen } from '../../components/ui';
 import { CONTESTS } from '../../data';
 import type { Contest } from '../../engine';
 import { useApp } from '../../store/useApp';
@@ -27,6 +28,7 @@ export default function Lobby() {
   const brand = useTheme();
   const balance = useApp((st) => st.balance);
   const entries = useApp((st) => st.entries);
+  const matchUsed = useApp((st) => st.matchUsed);
   const [filter, setFilter] = useState<Filter>('All');
 
   const { featured, rest } = useMemo(() => {
@@ -53,9 +55,12 @@ export default function Lobby() {
           <Text style={s.brand}>{isCoil ? 'coil' : brand.name}</Text>
           {isCoil ? <View style={[s.dot, { backgroundColor: c.accent }]} /> : null}
         </View>
-        <View style={s.balance} accessibilityLabel={`Mock balance ${formatMoney(balance)}`}>
-          <Text style={s.balanceValue}>{formatMoney(balance)}</Text>
-          <Text style={s.balanceLabel}>mock</Text>
+        <View style={s.money}>
+          <View style={s.balance} accessibilityLabel={`Mock balance ${formatMoney(balance)}`}>
+            <Text style={s.balanceValue} testID="lobby-balance">{formatMoney(balance)}</Text>
+            <Text style={s.balanceLabel}>mock balance</Text>
+          </View>
+          <Button small testID="lobby-deposit" label="Deposit" onPress={() => router.push('/deposit')} />
         </View>
       </View>
       <FlatList
@@ -67,6 +72,7 @@ export default function Lobby() {
         ListHeaderComponent={
           <View style={{ gap: 18, marginBottom: 12 }}>
             <Text style={s.tagline}>{brand.tagline}</Text>
+            <PromoRail hide={matchUsed ? ['first-draft-match'] : undefined} />
             {featured ? (
               <ContestCard contest={featured} featured myEntries={entries[featured.id] ?? 0} onPress={() => open(featured.id)} />
             ) : null}
@@ -97,7 +103,8 @@ const useStyles = makeStyles((c) => ({
   tagline: { ...type.small, color: c.textMuted, marginTop: -6 },
   balance: { alignItems: 'flex-end' },
   balanceLabel: { ...type.micro, color: c.warning },
-  balanceValue: { fontFamily: fonts.mono, fontSize: 17, color: c.text },
+  balanceValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: c.text },
+  money: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   list: { padding: 16, paddingTop: 8, paddingBottom: 32 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   section: { ...type.display24, color: c.text },
