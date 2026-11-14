@@ -1,10 +1,13 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { Animated, FlatList, Text, View } from 'react-native';
 
 import { slotForPick, totalPicks, type DraftState, type Player } from '../../engine';
 import { ME } from '../../store/useApp';
-import { shortName } from '../ui';
+import { motion, NATIVE_DRIVER, useReducedMotion } from '../../theme/motion';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
+import { shortName } from '../ui';
+import { Breath } from './Breath';
 
 const W = 92;
 
@@ -20,10 +23,11 @@ interface Cell {
 /** Horizontal strip of recent and upcoming picks centered on the current pick. */
 export const PickStrip = memo(function PickStrip({ state, players }: { state: DraftState; players: Map<string, Player> }) {
   const s = useStyles();
-  const c = useColors();
   const ref = useRef<FlatList<Cell>>(null);
   const teams = state.config.teams;
   const current = state.picks.length + 1;
+  const drafting = state.status === 'drafting';
+  const myTurnNow = drafting && state.entrants[slotForPick(current, teams)]?.id === ME;
   const cells = useMemo(() => {
     const out: Cell[] = [];
     const total = totalPicks(state.config);
@@ -35,13 +39,17 @@ export const PickStrip = memo(function PickStrip({ state, players }: { state: Dr
         overall: o,
         round: Math.ceil(o / teams),
         inRound: ((o - 1) % teams) + 1,
-        entrantName: e?.name ?? '—',
+        entrantName: e?.name ?? '',
         mine: e?.id === ME,
         player: pick ? players.get(pick.playerId) : undefined,
       });
     }
     return out;
   }, [state.picks, state.config, state.entrants, teams, players]);
+  const lastMine = useMemo(() => {
+    for (let i = state.picks.length - 1; i >= 0; i--) if (state.picks[i].entrantId === ME) return state.picks[i].overall;
+    return -1;
+  }, [state.picks]);
 
   useEffect(() => {
     const idx = Math.max(0, Math.min(cells.length - 1, current - 3));
@@ -60,54 +68,100 @@ export const PickStrip = memo(function PickStrip({ state, players }: { state: Dr
       contentContainerStyle={{ paddingHorizontal: 8 }}
       style={s.strip}
       windowSize={5}
-      renderItem={({ item }) => {
-        const isCurrent = item.overall === current && state.status === 'drafting';
-        const color = item.player ? c[item.player.position] : undefined;
-        return (
-          <View style={{ width: W, padding: 3 }}>
-            <View
-              style={[
-                s.cell,
-                item.mine && s.mine,
-                isCurrent && s.current,
-                color ? { borderLeftColor: color, borderLeftWidth: 3 } : null,
-              ]}
-            >
-              <Text style={s.pickNo}>
-                {item.round}.{String(item.inRound).padStart(2, '0')}
-                {isCurrent ? ' · NOW' : ''}
-              </Text>
-              {item.player ? (
-                <>
-                  <Text style={s.player} numberOfLines={1}>
-                    {shortName(item.player.name)}
-                  </Text>
-                  <Text style={[s.sub, { color }]} numberOfLines={1}>
-                    {item.player.position} · {item.player.team}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={[s.player, item.mine && { color: c.accent }]} numberOfLines={1}>
-                    {item.mine ? 'You' : item.entrantName}
-                  </Text>
-                  <Text style={s.sub}>{isCurrent ? 'on the clock' : 'upcoming'}</Text>
-                </>
-              )}
-            </View>
-          </View>
-        );
-      }}
+      extraData={`${current}:${lastMine}:${myTurnNow ? state.clockEndsAt : ''}`}
+      renderItem={({ item }) => (
+        <StripCell
+          cell={item}
+          isCurrent={item.overall === current && drafting}
+          latestMine={item.overall === lastMine}
+          endsAt={item.overall === current && myTurnNow ? state.clockEndsAt : null}
+        />
+      )}
     />
   );
 });
 
+const StripCell = memo(function StripCell({
+  cell,
+  isCurrent,
+  latestMine,
+  endsAt,
+}: {
+  cell: Cell;
+  isCurrent: boolean;
+  latestMine: boolean;
+  endsAt: number | null;
+}) {
+  const s = useStyles();
+  const c = useColors();
+  const reduced = useReducedMotion();
+  const color = cell.player ? c[cell.player.position] : undefined;
+  const fill = useRef(new Animated.Value(cell.player ? 1 : 0)).current;
+  const pop = useRef(new Animated.Value(1)).current;
+  const dot = useRef(new Animated.Value(latestMine ? 1 : 0)).current;
+  const had = useRef(!!cell.player);
+
+  // A new pick: a quick color fill. Your pick also springs in and gets the mint dot.
+  useEffect(() => {
+    if (!cell.player || had.current) return;
+    had.current = true;
+    if (reduced) {
+      fill.setValue(1);
+      return;
+    }
+    Animated.timing(fill, { toValue: 1, duration: motion.snap.duration, easing: motion.snap.easing, useNativeDriver: NATIVE_DRIVER }).start();
+    if (cell.mine) {
+      pop.setValue(0.86);
+      Animated.spring(pop, { toValue: 1, ...motion.spring, useNativeDriver: NATIVE_DRIVER }).start();
+    }
+  }, [cell.player, cell.mine, reduced, fill, pop]);
+
+  useEffect(() => {
+    if (reduced) return dot.setValue(latestMine ? 1 : 0);
+    Animated.spring(dot, { toValue: latestMine ? 1 : 0, ...motion.spring, useNativeDriver: NATIVE_DRIVER }).start();
+  }, [latestMine, reduced, dot]);
+
+  return (
+    <View style={{ width: W, padding: 3 }}>
+      <Animated.View style={[s.cell, cell.mine && s.mine, isCurrent && !endsAt && s.current, { transform: [{ scale: pop }] }]}>
+        {color ? (
+          <Animated.View pointerEvents="none" style={[s.fill, { backgroundColor: color + '2A', opacity: fill }]} />
+        ) : null}
+        {endsAt !== null ? <Breath endsAt={endsAt} color={c.accent} radius={10} /> : null}
+        <Text style={[s.pickNo, cell.mine && { color: c.primary }]}>
+          {cell.round}.{String(cell.inRound).padStart(2, '0')}
+        </Text>
+        {cell.player ? (
+          <>
+            <Text style={s.player} numberOfLines={1}>
+              {shortName(cell.player.name)}
+            </Text>
+            <Text style={[s.sub, { color }]} numberOfLines={1}>
+              {cell.player.position} · {cell.player.team}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[s.player, cell.mine && { color: c.primary }]} numberOfLines={1}>
+              {cell.mine ? 'You' : cell.entrantName}
+            </Text>
+            <Text style={s.sub}>{isCurrent ? 'picking' : ' '}</Text>
+          </>
+        )}
+        {cell.mine ? <Animated.View style={[s.dot, { opacity: dot, transform: [{ scale: dot }] }]} /> : null}
+      </Animated.View>
+    </View>
+  );
+});
+
 const useStyles = makeStyles((c) => ({
-  strip: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: c.border, paddingVertical: 6 },
-  cell: { height: 58, borderRadius: 10, backgroundColor: c.surface, padding: 7, justifyContent: 'space-between', borderWidth: 1, borderColor: c.border },
-  mine: { backgroundColor: c.surfaceAlt, borderColor: c.accent + '66' },
-  current: { borderColor: c.primary, borderWidth: 2 },
-  pickNo: { color: c.textMuted, fontSize: 10, fontWeight: '800' },
-  player: { color: c.text, fontSize: 13, fontWeight: '800' },
-  sub: { color: c.textMuted, fontSize: 10, fontWeight: '700' },
+  strip: { flexGrow: 0, paddingVertical: 6 },
+  cell: { height: 56, borderRadius: 10, backgroundColor: c.surface, paddingHorizontal: 8, paddingVertical: 6, justifyContent: 'space-between', overflow: 'hidden' },
+  fill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  mine: { backgroundColor: c.primary + '1F', borderWidth: 1, borderColor: c.primary + '55' },
+  current: { borderWidth: 1, borderColor: c.textMuted },
+  pickNo: { fontFamily: fonts.mono, fontSize: 10, color: c.textMuted },
+  player: { ...type.smallStrong, color: c.text, lineHeight: 16 },
+  sub: { ...type.label, fontSize: 10, color: c.textMuted, lineHeight: 12 },
+  dot: { position: 'absolute', top: 7, right: 7, width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent },
 }));

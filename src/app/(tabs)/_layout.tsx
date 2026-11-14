@@ -1,14 +1,9 @@
 import { Tabs } from 'expo-router/js-tabs';
-import { Text } from 'react-native';
 
+import { TabIcon } from '../../components/icons';
 import { useApp } from '../../store/useApp';
+import { fonts } from '../../theme/type';
 import { useColors } from '../../theme/useTheme';
-
-const GLYPH: Record<string, string> = { index: '◆', drafts: '▤', exposure: '%', account: '●' };
-
-function TabIcon({ name, color }: { name: string; color: string }) {
-  return <Text style={{ color, fontSize: 18, lineHeight: 22, fontWeight: '900' }}>{GLYPH[name]}</Text>;
-}
 
 export default function TabsLayout() {
   const c = useColors();
@@ -18,20 +13,24 @@ export default function TabsLayout() {
       screenOptions={({ route }) => ({
         headerShown: false,
         sceneStyle: { backgroundColor: c.bg },
-        tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.border, height: 64, paddingTop: 6 },
-        tabBarActiveTintColor: c.primary,
+        tabBarStyle: { backgroundColor: c.bg, borderTopColor: c.border, height: 64, paddingTop: 6 },
+        tabBarActiveTintColor: c.text,
         tabBarInactiveTintColor: c.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
-        tabBarIcon: ({ color }) => <TabIcon name={route.name} color={String(color)} />,
+        tabBarLabelStyle: { fontSize: 11, fontFamily: fonts.strong },
+        tabBarIcon: ({ color, focused }) => <TabIcon name={route.name} color={String(color)} focused={focused} dot={c.accent} />,
       })}
     >
       <Tabs.Screen name="index" options={{ title: 'Lobby' }} />
       <Tabs.Screen
         name="drafts"
-        options={{ title: 'Drafts', tabBarBadge: live || undefined, tabBarBadgeStyle: { backgroundColor: c.accent, color: c.bg } }}
+        options={{
+          title: 'Drafts',
+          tabBarBadge: live || undefined,
+          tabBarBadgeStyle: { backgroundColor: c.accent, color: c.bg, fontFamily: fonts.mono, fontSize: 10 },
+        }}
       />
       <Tabs.Screen name="exposure" options={{ title: 'Exposure' }} />
-      <Tabs.Screen name="account" options={{ title: 'Account' }} />
+      <Tabs.Screen name="account" options={{ title: 'You' }} />
     </Tabs>
   );
 }

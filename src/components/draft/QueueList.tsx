@@ -1,9 +1,12 @@
-import { memo } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { memo, type ReactNode } from 'react';
+import { FlatList, Text, View } from 'react-native';
 
 import type { Player } from '../../engine';
+import { feel } from '../../lib/feel';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
-import { Empty, PosPill } from '../ui';
+import { ArrowDown, ArrowUp, Close } from '../icons';
+import { Empty, PosPill, Tap } from '../ui';
 
 export const QueueList = memo(function QueueList({
   queue,
@@ -27,10 +30,8 @@ export const QueueList = memo(function QueueList({
       data={queue}
       keyExtractor={(id) => id}
       contentContainerStyle={{ paddingBottom: 32 }}
-      ListHeaderComponent={
-        queue.length ? <Text style={s.hint}>Autopick takes the first eligible player in your queue.</Text> : undefined
-      }
-      ListEmptyComponent={<Empty title="Your queue is empty" body="Tap ☆ on any player to queue them. When your clock runs out, we pick from here first." />}
+      ListHeaderComponent={queue.length ? <Text style={s.hint}>Top of the queue goes first.</Text> : undefined}
+      ListEmptyComponent={<Empty title="Queue's empty." body="Star a few guys. If your clock runs out, autopick starts here." />}
       renderItem={({ item: id, index }) => {
         const p = players.get(id);
         if (!p) return null;
@@ -48,13 +49,33 @@ export const QueueList = memo(function QueueList({
                 {p.team} · Bye {p.bye} · ADP {p.adp.toFixed(1)}
               </Text>
             </View>
-            <IconBtn label="▲" a11y={`Move ${p.name} up`} disabled={index === 0} onPress={() => onMove(id, -1)} />
-            <IconBtn label="▼" a11y={`Move ${p.name} down`} disabled={index === queue.length - 1} onPress={() => onMove(id, 1)} />
-            <IconBtn label="✕" a11y={`Remove ${p.name}`} color={c.danger} onPress={() => onRemove(id)} />
+            <IconBtn
+              a11y={`Move ${p.name} up`}
+              disabled={index === 0}
+              onPress={() => {
+                feel.nudge();
+                onMove(id, -1);
+              }}
+            >
+              <ArrowUp color={c.textMuted} size={18} />
+            </IconBtn>
+            <IconBtn
+              a11y={`Move ${p.name} down`}
+              disabled={index === queue.length - 1}
+              onPress={() => {
+                feel.nudge();
+                onMove(id, 1);
+              }}
+            >
+              <ArrowDown color={c.textMuted} size={18} />
+            </IconBtn>
+            <IconBtn a11y={`Remove ${p.name}`} onPress={() => onRemove(id)}>
+              <Close color={c.textMuted} size={18} />
+            </IconBtn>
             {canDraft ? (
-              <Pressable accessibilityRole="button" onPress={() => onDraft(id)} style={s.draft}>
+              <Tap accessibilityRole="button" accessibilityLabel={`Draft ${p.name}`} onPress={() => onDraft(id)} style={s.draft}>
                 <Text style={s.draftText}>Draft</Text>
-              </Pressable>
+              </Tap>
             ) : null}
           </View>
         );
@@ -63,26 +84,26 @@ export const QueueList = memo(function QueueList({
   );
 });
 
-function IconBtn({ label, a11y, onPress, disabled, color }: { label: string; a11y: string; onPress: () => void; disabled?: boolean; color?: string }) {
-  const c = useColors();
+function IconBtn({ children, a11y, onPress, disabled }: { children: ReactNode; a11y: string; onPress: () => void; disabled?: boolean }) {
   return (
-    <Pressable
+    <Tap
       accessibilityRole="button"
       accessibilityLabel={a11y}
+      disabled={disabled}
       onPress={disabled ? undefined : onPress}
       style={{ width: 40, height: 44, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.25 : 1 }}
     >
-      <Text style={{ color: color ?? c.textMuted, fontSize: 14, fontWeight: '800' }}>{label}</Text>
-    </Pressable>
+      {children}
+    </Tap>
   );
 }
 
 const useStyles = makeStyles((c) => ({
-  hint: { color: c.textMuted, fontSize: 12, padding: 12, paddingBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', minHeight: 60, paddingLeft: 12, paddingRight: 8, borderBottomWidth: 1, borderBottomColor: c.border },
-  idx: { color: c.textMuted, width: 24, fontWeight: '800' },
-  name: { color: c.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
-  meta: { color: c.textMuted, fontSize: 12 },
-  draft: { height: 40, paddingHorizontal: 10, borderRadius: 10, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
-  draftText: { color: c.primaryText, fontWeight: '800', fontSize: 12 },
+  hint: { ...type.small, color: c.textMuted, padding: 12, paddingBottom: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', minHeight: 60, paddingLeft: 12, paddingRight: 8, borderBottomWidth: 1, borderBottomColor: c.border + '99' },
+  idx: { fontFamily: fonts.mono, fontSize: 13, color: c.textMuted, width: 24 },
+  name: { ...type.bodyStrong, color: c.text, flexShrink: 1 },
+  meta: { ...type.micro, fontSize: 12, color: c.textMuted },
+  draft: { height: 40, paddingHorizontal: 14, borderRadius: 20, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
+  draftText: { fontFamily: fonts.strong, color: c.bg, fontSize: 13 },
 }));

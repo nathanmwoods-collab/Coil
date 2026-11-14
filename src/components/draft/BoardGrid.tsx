@@ -4,6 +4,7 @@ import { FlatList, ScrollView, Text, View } from 'react-native';
 import type { DraftState, Player } from '../../engine';
 import { ME } from '../../store/useApp';
 import { shortName } from '../ui';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 
 const CELL_W = 76;
@@ -29,7 +30,7 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
           <View style={s.roundCol} />
           {state.entrants.map((e) => (
             <View key={e.id} style={[s.head, e.id === ME && s.headMine]}>
-              <Text style={[s.headText, e.id === ME && { color: c.accent }]} numberOfLines={1}>
+              <Text style={[s.headText, e.id === ME && { color: c.primary }]} numberOfLines={1}>
                 {e.id === ME ? 'You' : e.name}
               </Text>
             </View>
@@ -44,7 +45,6 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
             <View style={{ flexDirection: 'row', height: CELL_H }}>
               <View style={s.roundCol}>
                 <Text style={s.roundText}>{round}</Text>
-                <Text style={s.dir}>{round % 2 === 1 ? '→' : '←'}</Text>
               </View>
               {state.entrants.map((e, slot) => {
                 const o = overallFor(round, slot, teams);
@@ -57,9 +57,9 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
                     <View
                       style={[
                         s.cell,
-                        col ? { backgroundColor: col + '30', borderColor: col + '80' } : null,
-                        e.id === ME && !pl ? { borderColor: c.accent + '55' } : null,
-                        isCur && { borderColor: c.primary, borderWidth: 2 },
+                        col ? { backgroundColor: col + '2A', borderColor: e.id === ME ? c.primary : 'transparent' } : null,
+                        e.id === ME && !pl ? { borderColor: c.primary + '77', backgroundColor: c.primary + '14' } : null,
+                        isCur && { borderColor: c.accent, borderWidth: 2 },
                       ]}
                     >
                       {pl ? (
@@ -91,13 +91,12 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
 const useStyles = makeStyles((c) => ({
   headerRow: { flexDirection: 'row', height: 34, borderBottomWidth: 1, borderBottomColor: c.border },
   head: { width: CELL_W, justifyContent: 'center', paddingHorizontal: 4 },
-  headMine: { backgroundColor: c.surfaceAlt },
-  headText: { color: c.textMuted, fontSize: 10, fontWeight: '800', textAlign: 'center' },
+  headMine: { backgroundColor: c.primary + '22' },
+  headText: { ...type.label, color: c.textMuted, fontSize: 10, textAlign: 'center' },
   roundCol: { width: 36, alignItems: 'center', justifyContent: 'center' },
-  roundText: { color: c.textMuted, fontWeight: '800', fontSize: 12 },
-  dir: { color: c.border, fontSize: 10 },
+  roundText: { fontFamily: fonts.mono, color: c.textMuted, fontSize: 12 },
   cell: { flex: 1, borderRadius: 6, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, padding: 4, justifyContent: 'center' },
-  cellName: { color: c.text, fontSize: 11, fontWeight: '800' },
-  cellSub: { fontSize: 9, fontWeight: '700' },
-  cellEmpty: { color: c.border, fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  cellName: { ...type.label, color: c.text },
+  cellSub: { ...type.micro, fontSize: 9, lineHeight: 12 },
+  cellEmpty: { fontFamily: fonts.mono, color: c.border, fontSize: 10, textAlign: 'center' },
 }));

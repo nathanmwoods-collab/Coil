@@ -2,10 +2,12 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
 
-import { Button, Card, Empty, formatMoney, ordinal, Screen, Segmented } from '../../components/ui';
+import { ChevronRight } from '../../components/icons';
+import { Button, Card, Empty, formatMoney, formatPts, ordinal, relativeDay, Screen, Segmented } from '../../components/ui';
 import { onTheClock, picksUntilTurn, totalPicks } from '../../engine';
 import { draftResult } from '../../store/results';
 import { contestById, ME, useApp, type DraftEntry } from '../../store/useApp';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 
 type Tab = 'live' | 'done';
@@ -23,26 +25,30 @@ export default function Drafts() {
   return (
     <Screen>
       <View style={s.header}>
-        <Text style={s.title}>My drafts</Text>
+        <Text style={s.title}>Your drafts</Text>
         <Segmented<Tab>
           value={tab}
           onChange={setTab}
           options={[
             { key: 'live', label: 'Live', badge: live.length },
-            { key: 'done', label: 'Completed', badge: done.length },
+            { key: 'done', label: 'Finished', badge: done.length },
           ]}
         />
       </View>
       <FlatList
         data={data}
         keyExtractor={(d) => d.id}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 32 }}
         renderItem={({ item }) => (tab === 'live' ? <LiveRow d={item} /> : <DoneRow d={item} />)}
         ListEmptyComponent={
           <Empty
-            title={tab === 'live' ? 'No live drafts' : 'No completed teams yet'}
-            body={tab === 'live' ? 'Join a draft from the lobby — fast drafts finish in minutes.' : 'Finish a draft and your simulated season shows up here.'}
-            action={<Button small label="Go to lobby" onPress={() => router.navigate('/')} />}
+            title={tab === 'live' ? 'Nothing on the clock.' : 'No teams in the books.'}
+            body={
+              tab === 'live'
+                ? "30-second pods fill fast. You'll be picking in a minute."
+                : "Finish a draft and we'll play out the whole season."
+            }
+            action={<Button small label="Find a pod" onPress={() => router.navigate('/')} />}
           />
         }
       />
@@ -58,19 +64,17 @@ function LiveRow({ d }: { d: DraftEntry }) {
   const until = picksUntilTurn(d.state, ME);
   const total = totalPicks(d.state.config);
   return (
-    <Card onPress={() => router.push(`/draft/${d.id}`)} style={[s.row, mine && { borderColor: c.primary }]}>
-      <View style={{ flex: 1, gap: 4 }}>
+    <Card onPress={() => router.push(`/draft/${d.id}`)} style={[s.row, mine && { borderWidth: 1, borderColor: c.accent }]}>
+      <View style={{ flex: 1, gap: 3 }}>
         <Text style={s.name}>{contest?.name ?? 'Draft'}</Text>
         <Text style={s.meta}>
-          {d.state.status === 'filling' ? 'Filling…' : `Pick ${d.state.picks.length + 1} of ${total}`}
-          {d.autodraft || d.autopilot ? ' · Autodraft on' : ''}
+          {d.state.status === 'filling' ? 'Finding drafters…' : `Pick ${d.state.picks.length + 1} of ${total}`}
+          {d.autodraft || d.autopilot ? ' · Autopilot on' : ''}
         </Text>
       </View>
-      <View style={[s.pill, { backgroundColor: mine ? c.primary : c.surfaceAlt }]}>
-        <Text style={[s.pillText, { color: mine ? c.primaryText : c.text }]}>
-          {mine ? 'On the clock' : until === null ? '—' : `Up in ${until}`}
-        </Text>
-      </View>
+      <Text style={[s.status, { color: mine ? c.accent : c.textMuted }]}>
+        {mine ? "You're up" : until === null ? 'Roster full' : `${until} ${until === 1 ? 'pick' : 'picks'} away`}
+      </Text>
     </Card>
   );
 }
@@ -81,41 +85,33 @@ function DoneRow({ d }: { d: DraftEntry }) {
   const contest = contestById(d.contestId);
   const r = useMemo(() => draftResult(d), [d]);
   const teams = d.state.config.teams;
-  const top = r.myRank === 1;
   return (
     <Card onPress={() => router.push(`/results/${d.id}`)} style={s.row}>
-      <View style={[s.rank, { borderColor: top ? c.accent : c.border }]}>
-        <Text style={[s.rankNum, top && { color: c.accent }]}>{ordinal(r.myRank)}</Text>
+      <View style={s.rank}>
+        <Text style={[s.rankNum, r.myRank === 1 && { color: c.accent }]}>{ordinal(r.myRank)}</Text>
         <Text style={s.rankOf}>of {teams}</Text>
       </View>
-      <View style={{ flex: 1, gap: 4 }}>
+      <View style={{ flex: 1, gap: 3 }}>
         <Text style={s.name} numberOfLines={1}>
           {contest?.name ?? 'Draft'}
         </Text>
         <Text style={s.meta}>
-          {r.myTotal.toFixed(1)} pts · {formatMoney(d.entryFee)} entry · {new Date(d.createdAt).toLocaleDateString()}
+          {formatPts(r.myTotal)} pts · {formatMoney(d.entryFee)} · {relativeDay(d.createdAt)}
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 2 }}>
-          {r.roster.map((p) => (
-            <View key={p.id} style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: c[p.position] }} />
-          ))}
-        </View>
       </View>
-      <Text style={s.chev}>›</Text>
+      <ChevronRight color={c.textMuted} size={20} />
     </Card>
   );
 }
 
 const useStyles = makeStyles((c) => ({
-  header: { padding: 16, paddingBottom: 4, gap: 12 },
-  title: { color: c.text, fontSize: 26, fontWeight: '900' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72 },
-  name: { color: c.text, fontSize: 15, fontWeight: '800' },
-  meta: { color: c.textMuted, fontSize: 12 },
-  pill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  pillText: { fontSize: 12, fontWeight: '800' },
-  rank: { width: 56, height: 56, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  rankNum: { color: c.text, fontSize: 18, fontWeight: '900' },
-  rankOf: { color: c.textMuted, fontSize: 10 },
-  chev: { color: c.textMuted, fontSize: 24 },
+  header: { padding: 16, paddingBottom: 0, gap: 8 },
+  title: { ...type.display40, color: c.text },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 72 },
+  name: { ...type.bodyStrong, color: c.text },
+  meta: { ...type.small, color: c.textMuted },
+  status: { ...type.smallStrong },
+  rank: { width: 52, alignItems: 'center' },
+  rankNum: { fontFamily: fonts.display, fontSize: 30, lineHeight: 30, color: c.primary },
+  rankOf: { ...type.micro, fontSize: 10, color: c.textMuted },
 }));
