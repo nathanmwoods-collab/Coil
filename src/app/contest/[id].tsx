@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, clockLabel, clockSpeed, Empty, formatMoney, MockNote, Screen } from '../../components/ui';
@@ -16,6 +16,8 @@ export default function ContestDetail() {
   const mine = useApp((st) => (contest ? st.entries[contest.id] ?? 0 : 0));
   const enterContest = useApp((st) => st.enterContest);
   const [error, setError] = useState<string | null>(null);
+  // A double-tap fires onPress twice before navigation; only the first may enter (and charge).
+  const entering = useRef(false);
 
   if (!contest) {
     return (
@@ -31,8 +33,10 @@ export default function ContestDetail() {
   const lineup = DEFAULT_LINEUP;
 
   const onEnter = () => {
+    if (entering.current) return;
     const r = enterContest(contest.id);
     if (!r.ok) return setError(r.error);
+    entering.current = true;
     setError(null);
     router.replace(`/draft/${r.draftId}`);
   };
