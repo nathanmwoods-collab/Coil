@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { FlatList, Image, Text, View } from 'react-native';
 
 import { ContestCard } from '../../components/ContestCard';
 import { Chip, clockSpeed, formatMoney, Screen } from '../../components/ui';
 import { CONTESTS } from '../../data';
 import type { Contest } from '../../engine';
 import { useApp } from '../../store/useApp';
+import { BRANDS } from '../../theme/brands';
 import { makeStyles, useTheme } from '../../theme/useTheme';
 
 type Filter = 'All' | 'Fast' | 'Slow';
@@ -38,7 +39,12 @@ export default function Lobby() {
     <Screen>
       <View style={s.header}>
         <View>
-          <Text style={s.brand}>{brand.name}</Text>
+          <View style={s.brandRow}>
+            {brand.name === BRANDS.coil.name && (
+              <Image source={require('../../../assets/logo-mark.png')} style={s.logo} accessibilityIgnoresInvertColors />
+            )}
+            <Text style={s.brand}>{brand.name}</Text>
+          </View>
           <Text style={s.tagline}>{brand.tagline}</Text>
         </View>
         <View style={s.balance} accessibilityLabel={`Mock balance ${formatMoney(balance)}`}>
@@ -77,6 +83,8 @@ const Sep = () => <View style={{ height: 12 }} />;
 
 const useStyles = makeStyles((c) => ({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logo: { width: 30, height: 30 },
   brand: { color: c.text, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   tagline: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
   balance: { backgroundColor: c.surface, borderColor: c.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, alignItems: 'flex-end' },
