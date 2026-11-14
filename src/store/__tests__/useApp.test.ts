@@ -13,7 +13,8 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 
 import { moveRankToTop, onTheClock, toggleExcluded } from '../../engine';
 import { exposureFor } from '../results';
-import { ME, MISSES_FOR_AUTOPILOT, rankingsFor, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
+import { PLAYERS } from '../../data';
+import { liveAdp, ME, MISSES_FOR_AUTOPILOT, rankingsFor, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
 
 const get = () => useApp.getState();
 const draft = (id: string) => get().drafts[id] as DraftEntry;
@@ -241,5 +242,28 @@ describe('team names', () => {
     expect([teamName(draft(a)), teamName(draft(b))]).toEqual(['Zero RB · #1', 'Zero RB · #2']);
     get().renameTeams({ [a]: '   ' });
     expect(teamName(draft(a))).toBe('Entry 1');
+  });
+});
+
+describe('ADP from completed drafts', () => {
+  it('folds each completed draft in once, per draft type', () => {
+    const r = get().enterContest('c_two_minute_drill', { count: 2, autodraft: true });
+    if (!r.ok) throw new Error(r.error);
+    let t = Date.now();
+    for (let i = 0; i < 60 && r.draftIds.some((id) => draft(id).state.status !== 'complete'); i++) get().tick((t += 200));
+    const table = get().adp.fast12;
+    expect(table?.drafts).toBe(2);
+    expect(get().adp.slow12).toBeUndefined();
+    expect(r.draftIds.every((id) => draft(id).adpCounted)).toBe(true);
+    // Every player in the pool was observed in both drafts (drafted or not).
+    expect(Object.keys(table!.players)).toHaveLength(PLAYERS.length);
+    expect(table!.players.p_ja_chase.n).toBe(2);
+    get().tick((t += 200));
+    expect(get().adp.fast12?.drafts).toBe(2);
+    // Live ADP stays near the seed for a top pick and is a finite number for everyone.
+    const chase = liveAdp(table, 'p_ja_chase', 1.3);
+    expect(chase).toBeGreaterThan(0.9);
+    expect(chase).toBeLessThan(6);
+    for (const p of PLAYERS) expect(Number.isFinite(liveAdp(table, p.id, p.adp))).toBe(true);
   });
 });

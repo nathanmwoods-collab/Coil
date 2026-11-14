@@ -1,11 +1,11 @@
 import { memo } from 'react';
 import { Text, View } from 'react-native';
 
-import type { Player } from '../../engine';
+import { adpMove, type Player } from '../../engine';
 import { feel } from '../../lib/feel';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
-import { QueueMark } from '../icons';
+import { ArrowDown, ArrowUp, QueueMark } from '../icons';
 import { PlayerAvatar } from '../PlayerAvatar';
 import { PosPill, Tap } from '../ui';
 
@@ -19,6 +19,7 @@ export const PlayerRow = memo(function PlayerRow({
   canDraft,
   stack,
   exposurePct,
+  adp,
   onDraft,
   onStar,
 }: {
@@ -27,11 +28,15 @@ export const PlayerRow = memo(function PlayerRow({
   canDraft: boolean;
   stack: StackTag;
   exposurePct?: number;
+  /** Live ADP for this draft type. Defaults to the seed ADP. */
+  adp?: number;
   onDraft: (id: string) => void;
   onStar: (id: string) => void;
 }) {
   const s = useStyles();
   const c = useColors();
+  const shown = adp ?? player.adp;
+  const move = adpMove(player.adp, shown);
   return (
     <View style={s.row}>
       <Tap
@@ -64,9 +69,17 @@ export const PlayerRow = memo(function PlayerRow({
           {exposurePct ? <Text style={s.meta}>· {Math.round(exposurePct)}% exp</Text> : null}
         </View>
       </View>
-      <View style={s.adp}>
-        <Text style={s.adpValue}>{player.adp.toFixed(1)}</Text>
-        <Text style={s.adpLabel}>ADP</Text>
+      <View
+        style={s.adp}
+        accessibilityLabel={`ADP ${shown.toFixed(1)}${move ? `, ${move === 'up' ? 'rising' : 'sliding'} from ${player.adp.toFixed(1)}` : ''}`}
+      >
+        <Text style={s.adpValue}>{shown.toFixed(1)}</Text>
+        <View style={s.adpSub}>
+          {move === 'up' ? <ArrowUp color={c.success} size={10} strokeWidth={2.6} /> : move === 'down' ? <ArrowDown color={c.danger} size={10} strokeWidth={2.6} /> : null}
+          <Text style={[s.adpLabel, move ? { color: move === 'up' ? c.success : c.danger } : null]}>
+            {move ? Math.abs(player.adp - shown).toFixed(1) : 'ADP'}
+          </Text>
+        </View>
       </View>
       <Tap
         accessibilityRole="button"
@@ -100,6 +113,7 @@ const useStyles = makeStyles((c) => ({
   meta: { ...type.micro, fontSize: 12, color: c.textMuted },
   tag: { ...type.label },
   adp: { width: 46, alignItems: 'flex-end', marginRight: 10 },
+  adpSub: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   adpLabel: { ...type.micro, fontSize: 9, color: c.textMuted },
   adpValue: { fontFamily: fonts.mono, fontSize: 14, color: c.text },
   draft: { minWidth: 64, height: 40, borderRadius: 20, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },

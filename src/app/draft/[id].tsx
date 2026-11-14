@@ -18,7 +18,7 @@ import { botLine } from '../../lib/banter';
 import { announce, feel } from '../../lib/feel';
 import { searchPlayers } from '../../lib/search';
 import { exposureFor, PLAYER_BY_ID } from '../../store/results';
-import { contestById, draftTypeFor, ME, useApp, type DraftEntry } from '../../store/useApp';
+import { contestById, draftTypeFor, liveAdp, ME, useApp, type DraftEntry } from '../../store/useApp';
 import { useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
@@ -140,13 +140,18 @@ function Room({ d }: { d: DraftEntry }) {
     return new Map(exposureFor(done).map((r) => [r.player.id, r.pct]));
   }, [doneKey]);
 
+  // ADP for this draft type: the seed blended with what completed drafts actually did.
+  const adpTable = useApp((st) => st.adp[draftTypeFor(d)]);
+  const adpMap = useMemo(() => new Map(PLAYERS.map((p) => [p.id, liveAdp(adpTable, p.id, p.adp)])), [adpTable]);
+
   const available = useMemo(() => {
+    const adpOf = (p: Player) => adpMap.get(p.id) ?? p.adp;
     const pool = PLAYERS.filter((p) => !taken.has(p.id) && (pos === 'All' || p.position === pos)).sort(
-      sort === 'adp' ? (a, b) => a.adp - b.adp : (a, b) => b.projPoints - a.projPoints,
+      sort === 'adp' ? (a, b) => adpOf(a) - adpOf(b) : (a, b) => b.projPoints - a.projPoints,
     );
     // Search keeps the sort, with exact matches ("cmc", "eagles wr") leading.
     return searchPlayers(q, pool);
-  }, [taken, pos, sort, q]);
+  }, [taken, pos, sort, q, adpMap]);
 
   const onDraft = useCallback(
     (pid: string) => {
@@ -182,11 +187,12 @@ function Room({ d }: { d: DraftEntry }) {
         canDraft={myTurn}
         stack={stackFor(item)}
         exposurePct={exposureMap?.get(item.id)}
+        adp={adpMap.get(item.id)}
         onDraft={onDraft}
         onStar={onStar}
       />
     ),
-    [queued, myTurn, stackFor, exposureMap, onDraft, onStar],
+    [queued, myTurn, stackFor, exposureMap, adpMap, onDraft, onStar],
   );
 
   const auto = d.autodraft || d.autopilot;

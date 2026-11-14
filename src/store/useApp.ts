@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { CONTESTS, DEFAULT_WEEK, PLAYERS, SEASON_WEEKS } from '../data';
 import { depositBonus } from '../data/promos';
 import {
+  adpValue,
   autoPickPlayer,
   autopickOrder,
   botPickPlayer,
@@ -20,6 +21,9 @@ import {
   onTheClock,
   reconcileRankings,
   seedRankings,
+  totalPicks,
+  updateAdp,
+  type AdpTable,
   type Contest,
   type DraftType,
   type Rankings,
@@ -52,6 +56,51 @@ export interface DraftEntry {
   name?: string;
   /** Entered as "autodraft from my rankings": runs to completion in the background, no pick clocks. */
   background?: boolean;
+  /** This draft's picks have been folded into the ADP table. */
+  adpCounted?: boolean;
+}
+
+/**
+ * MOCK-CLIENT ADP settings. Pods here are one human and bots, so bots are
+ * weighted higher and the prior lower than the server defaults (ADP_DEFAULTS)
+ * to make movement visible after a handful of drafts.
+ */
+export const CLIENT_ADP = { botWeight: 0.5, halfLifeDays: 14, priorWeight: 3, minSamples: 2 } as const;
+const PLAYER_IDS = PLAYERS.map((p) => p.id);
+
+/** Fold newly completed drafts into the per-draft-type ADP tables, once each. */
+function foldAdp(
+  drafts: Record<string, DraftEntry>,
+  adp: Partial<Record<DraftType, AdpTable>>,
+  now: number,
+): { drafts: Record<string, DraftEntry>; adp: Partial<Record<DraftType, AdpTable>> } | null {
+  let out: { drafts: Record<string, DraftEntry>; adp: Partial<Record<DraftType, AdpTable>> } | null = null;
+  for (const id in drafts) {
+    const d = drafts[id];
+    if (d.state.status !== 'complete' || d.adpCounted) continue;
+    out = out ?? { drafts: { ...drafts }, adp: { ...adp } };
+    const type = draftTypeFor(d);
+    const bots = new Set(d.state.entrants.filter((e) => e.isBot).map((e) => e.id));
+    out.adp[type] = updateAdp(
+      out.adp[type] ?? { asOf: 0, drafts: 0, players: {} },
+      [
+        {
+          at: d.state.picks[d.state.picks.length - 1]?.at ?? now,
+          totalPicks: totalPicks(d.state.config),
+          // An autopick for the user is a ranking speaking, not a bot: it counts as a human pick.
+          picks: d.state.picks.map((p) => ({ playerId: p.playerId, overall: p.overall, byBot: bots.has(p.entrantId) })),
+        },
+      ],
+      { now, botWeight: CLIENT_ADP.botWeight, halfLifeDays: CLIENT_ADP.halfLifeDays, universe: PLAYER_IDS },
+    );
+    out.drafts[id] = { ...d, adpCounted: true };
+  }
+  return out;
+}
+
+/** Live ADP for a draft type: seed blended with what real drafts did. Falls back to seed. */
+export function liveAdp(table: AdpTable | undefined, playerId: string, seedAdp: number): number {
+  return adpValue(table, playerId, seedAdp, { priorWeight: CLIENT_ADP.priorWeight, minSamples: CLIENT_ADP.minSamples });
 }
 
 /** Picks a background autodraft makes per ticker pass (200ms): a pod finishes in a few seconds. */
@@ -85,6 +134,9 @@ interface AppState {
 
   /** MOCK season clock: completed weeks, 0 to 17. Moved from Lab. */
   currentWeek: number;
+
+  /** ADP learned from completed drafts, per draft type. */
+  adp: Partial<Record<DraftType, AdpTable>>;
 
   addFunds: (amount: number) => void;
   setWeek: (week: number) => void;
@@ -206,6 +258,7 @@ const initial = {
   haptics: true,
   matchUsed: false,
   currentWeek: DEFAULT_WEEK,
+  adp: {} as Partial<Record<DraftType, AdpTable>>,
   rankings: {} as Partial<Record<DraftType, Rankings>>,
 };
 
@@ -316,13 +369,14 @@ export const useApp = create<AppState>()(
         }
         try {
           const state = makePick(d.state, ME, playerId, { now });
-          set((s) => ({
-            drafts: updateDraft(s.drafts, draftId, {
+          set((s) => {
+            const drafts = updateDraft(s.drafts, draftId, {
               state,
               queue: d.queue.filter((q) => q !== playerId),
               missed: 0,
-            }),
-          }));
+            });
+            return (state.status === 'complete' && foldAdp(drafts, s.adp, now)) || { drafts };
+          });
           return null;
         } catch (e) {
           return e instanceof Error ? e.message : "That pick didn't go through. Try again.";
@@ -382,7 +436,10 @@ export const useApp = create<AppState>()(
             next[id] = d;
           }
         }
-        if (next) set({ drafts: next });
+        if (next) {
+          const folded = foldAdp(next, s.adp, now);
+          set(folded ?? { drafts: next });
+        }
       },
     }),
     {
@@ -398,6 +455,7 @@ export const useApp = create<AppState>()(
         matchUsed: s.matchUsed,
         rankings: s.rankings,
         currentWeek: s.currentWeek,
+        adp: s.adp,
       }),
       // Called after hydration finishes (success or error); defer so `useApp` is defined.
       onRehydrateStorage: () => () => {
