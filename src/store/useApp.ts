@@ -51,7 +51,7 @@ interface AppState {
 
   addFunds: (amount: number) => void;
   enterContest: (contestId: string) => { ok: true; draftId: string } | { ok: false; error: string };
-  draftPlayer: (draftId: string, playerId: string) => string | null;
+  draftPlayer: (draftId: string, playerId: string, now?: number) => string | null;
   toggleQueue: (draftId: string, playerId: string) => void;
   moveQueue: (draftId: string, playerId: string, dir: -1 | 1) => void;
   setAutodraft: (draftId: string, on: boolean) => void;
@@ -138,6 +138,8 @@ export const useApp = create<AppState>()(
 
       enterContest: (contestId) => {
         const s = get();
+        // Entering before persisted state loads would be overwritten by rehydration.
+        if (!s.hydrated) return { ok: false, error: 'Still loading your account — try again' };
         const c = contestById(contestId);
         if (!c) return { ok: false, error: 'Contest not found' };
         const mine = s.entries[c.id] ?? 0;
@@ -146,7 +148,9 @@ export const useApp = create<AppState>()(
         if (s.balance < c.entryFee) return { ok: false, error: 'Not enough mock balance — add funds in Account' };
 
         const now = Date.now();
-        const id = `${c.id}-${now.toString(36)}`;
+        // Two entries in the same millisecond must not share (and overwrite) one draft.
+        let id = `${c.id}-${now.toString(36)}`;
+        for (let n = 2; s.drafts[id]; n++) id = `${c.id}-${now.toString(36)}-${n}`;
         const seed = hashString(id);
         const rand = mulberry32(seed);
         const mySlot = Math.floor(rand() * c.teams);
@@ -173,11 +177,16 @@ export const useApp = create<AppState>()(
         return { ok: true, draftId: id };
       },
 
-      draftPlayer: (draftId, playerId) => {
+      draftPlayer: (draftId, playerId, now = Date.now()) => {
         const d = get().drafts[draftId];
         if (!d) return 'Draft not found';
+        // The ticker may not have run yet: an expired clock belongs to the autopick.
+        if (isMyTurn(d) && d.state.clockEndsAt !== null && now >= d.state.clockEndsAt) {
+          get().tick(now);
+          return "Time's up — your pick was made automatically";
+        }
         try {
-          const state = makePick(d.state, ME, playerId);
+          const state = makePick(d.state, ME, playerId, { now });
           set((s) => ({
             drafts: updateDraft(s.drafts, draftId, {
               state,
