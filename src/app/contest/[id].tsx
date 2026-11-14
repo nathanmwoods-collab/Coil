@@ -90,7 +90,7 @@ export default function ContestDetail() {
             {lineup.TE} TE and {lineup.FLEX} flex (RB/WR/TE). Half-PPR.
           </Text>
           <Text style={s.p}>
-            Miss a pick and autopick goes to your queue first, then best ADP. Miss {MISSES_FOR_AUTOPILOT} in a row and autopilot drafts for you
+            Miss a pick and autopick goes to your queue first, then your rankings, then best ADP. Miss {MISSES_FOR_AUTOPILOT} in a row and autopilot drafts for you
             until you take it back.
           </Text>
         </View>

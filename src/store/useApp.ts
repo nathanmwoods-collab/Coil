@@ -6,14 +6,20 @@ import { CONTESTS, PLAYERS } from '../data';
 import { depositBonus } from '../data/promos';
 import {
   autoPickPlayer,
+  autopickOrder,
   botPickPlayer,
   createDraft,
   DEFAULT_LINEUP,
   draftedIds,
+  draftTypeOf,
   makePick,
   mulberry32,
   onTheClock,
+  reconcileRankings,
+  seedRankings,
   type Contest,
+  type DraftType,
+  type Rankings,
   type DraftState,
   type Entrant,
 } from '../engine';
@@ -55,7 +61,13 @@ interface AppState {
   /** The one-time first-deposit match has been paid out. */
   matchUsed: boolean;
 
+  /** Personal rankings per draft type. Missing means "same as ADP". */
+  rankings: Partial<Record<DraftType, Rankings>>;
+
   addFunds: (amount: number) => void;
+  /** Apply an edit (move, exclude, tier break) to one draft type's rankings. */
+  editRankings: (type: DraftType, edit: (r: Rankings) => Rankings) => void;
+  resetRankings: (type: DraftType) => void;
   /** Mock deposit: adds the amount plus any first-deposit match. Returns the bonus. */
   deposit: (amount: number) => number;
   enterContest: (contestId: string) => { ok: true; draftId: string } | { ok: false; error: string };
@@ -95,13 +107,32 @@ export function contestById(id: string): Contest | undefined {
   return CONTESTS.find((c) => c.id === id);
 }
 
+/** Which rankings list a draft autopicks from. */
+export function draftTypeFor(d: Pick<DraftEntry, 'contestId' | 'state'>): DraftType {
+  const c = contestById(d.contestId);
+  const cfg = d.state.config;
+  return draftTypeOf(c ?? { teams: cfg.teams, maxEntries: Infinity, pickClockSec: cfg.pickClockSec });
+}
+
+/** Rankings for a draft type, seeded from ADP until the user edits them. */
+export function rankingsFor(all: Partial<Record<DraftType, Rankings>>, type: DraftType): Rankings {
+  const r = all[type];
+  return r ? reconcileRankings(r, PLAYERS) : SEED_RANKINGS;
+}
+const SEED_RANKINGS = seedRankings(PLAYERS);
+
 function updateDraft(drafts: Record<string, DraftEntry>, id: string, patch: Partial<DraftEntry>) {
   const d = drafts[id];
   return d ? { ...drafts, [id]: { ...d, ...patch } } : drafts;
 }
 
 /** One automatic step for a draft, or null if nothing should happen yet. */
-function stepDraft(d: DraftEntry, now: number, botDelay: number): DraftEntry | null {
+function stepDraft(
+  d: DraftEntry,
+  now: number,
+  botDelay: number,
+  rankings: Partial<Record<DraftType, Rankings>> = {},
+): DraftEntry | null {
   const st = d.state;
   if (st.status !== 'drafting') return null;
   const clock = onTheClock(st);
@@ -122,7 +153,8 @@ function stepDraft(d: DraftEntry, now: number, botDelay: number): DraftEntry | n
   const expired = st.clockEndsAt !== null && now >= st.clockEndsAt;
   const autoReady = auto && now - lastAt >= Math.min(botDelay, 700);
   if (!expired && !autoReady) return null;
-  const pl = autoPickPlayer(st, clock.id, PLAYERS, d.queue);
+  // Autopick order: this draft's queue, then the user's rankings for this draft type, then ADP.
+  const pl = autoPickPlayer(st, clock.id, PLAYERS, autopickOrder(d.queue, rankings[draftTypeFor(d)]));
   if (!pl) return null;
   const state = makePick(st, clock.id, pl.id, { auto: true, now });
   const missed = !auto && expired ? d.missed + 1 : d.missed;
@@ -143,6 +175,7 @@ const initial = {
   brandOverride: null as string | null,
   haptics: true,
   matchUsed: false,
+  rankings: {} as Partial<Record<DraftType, Rankings>>,
 };
 
 export const useApp = create<AppState>()(
@@ -152,6 +185,19 @@ export const useApp = create<AppState>()(
       ...initial,
 
       addFunds: (amount) => set((s) => ({ balance: Math.round((s.balance + amount) * 100) / 100 })),
+
+      editRankings: (type, edit) =>
+        set((s) => {
+          const cur = rankingsFor(s.rankings, type);
+          const next = edit(cur);
+          return next === cur ? s : { rankings: { ...s.rankings, [type]: next } };
+        }),
+
+      resetRankings: (type) =>
+        set((s) => {
+          const { [type]: _drop, ...rest } = s.rankings;
+          return { rankings: rest };
+        }),
 
       deposit: (amount) => {
         const s = get();
@@ -265,7 +311,7 @@ export const useApp = create<AppState>()(
         for (const id in s.drafts) {
           const d = s.drafts[id];
           if (d.state.status !== 'drafting') continue;
-          const stepped = stepDraft(d, now, delay);
+          const stepped = stepDraft(d, now, delay, s.rankings);
           if (stepped) {
             next = next ?? { ...s.drafts };
             next[id] = stepped;
@@ -285,6 +331,7 @@ export const useApp = create<AppState>()(
         brandOverride: s.brandOverride,
         haptics: s.haptics,
         matchUsed: s.matchUsed,
+        rankings: s.rankings,
       }),
       // Called after hydration finishes (success or error); defer so `useApp` is defined.
       onRehydrateStorage: () => () => {

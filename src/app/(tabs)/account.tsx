@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -59,6 +60,13 @@ export default function Account() {
         </View>
 
         <View style={s.list}>
+          <Tap accessibilityRole="button" onPress={() => router.push('/rankings')} style={s.row} testID="rankings-row" scaleTo={0.99}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowLabel}>Rankings</Text>
+              <Text style={s.hint}>Your order for autopick, per draft type.</Text>
+            </View>
+            <ChevronRight color={c.textMuted} size={18} />
+          </Tap>
           <Pressable
             accessibilityRole="switch"
             accessibilityState={{ checked: haptics }}

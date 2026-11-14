@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, LayoutAnimation, Modal, Pressable, Text, TextInput, View } from 'react-native';
 
-import { Alert, Check, ChevronLeft, More } from '../../components/icons';
+import { Alert, Check, ChevronLeft, ChevronRight, More } from '../../components/icons';
 import { BoardGrid } from '../../components/draft/BoardGrid';
 import { Breath } from '../../components/draft/Breath';
 import { CoilReveal } from '../../components/draft/CoilReveal';
@@ -18,7 +18,7 @@ import { botLine } from '../../lib/banter';
 import { announce, feel } from '../../lib/feel';
 import { searchPlayers } from '../../lib/search';
 import { exposureFor, PLAYER_BY_ID } from '../../store/results';
-import { contestById, ME, useApp, type DraftEntry } from '../../store/useApp';
+import { contestById, draftTypeFor, ME, useApp, type DraftEntry } from '../../store/useApp';
 import { useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
@@ -374,7 +374,7 @@ function Room({ d }: { d: DraftEntry }) {
           <Text style={s.sheetTitle}>This draft</Text>
           <Toggle
             label="Autopilot"
-            hint="Drafts for you, queue first."
+            hint="Drafts for you. Queue first, then your rankings."
             on={d.autodraft}
             onPress={() => setAutodraft(d.id, !d.autodraft)}
             testID="autodraft-toggle"
@@ -386,6 +386,22 @@ function Room({ d }: { d: DraftEntry }) {
             onPress={() => setBotSpeed(botSpeed === 'fast' ? 'normal' : 'fast')}
             testID="fast-bots-toggle"
           />
+          <Tap
+            accessibilityRole="button"
+            onPress={() => {
+              setMenu(false);
+              router.push(`/rankings?type=${draftTypeFor(d)}`);
+            }}
+            style={s.sheetLink}
+            testID="sheet-rankings"
+            scaleTo={0.99}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={s.sheetLinkLabel}>Your rankings</Text>
+              <Text style={s.sheetLinkHint}>Autopick uses these after your queue.</Text>
+            </View>
+            <ChevronRight color={c.textMuted} size={18} />
+          </Tap>
           <Button variant="secondary" label="Done" onPress={() => setMenu(false)} icon={<Check color={c.text} size={18} />} testID="sheet-done" />
         </View>
       </Modal>
@@ -461,6 +477,9 @@ const useStyles = makeStyles((c) => ({
   boardFooter: { padding: 16, borderTopWidth: 1, borderTopColor: c.border },
   scrim: { flex: 1, backgroundColor: '#000000AA' },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32, gap: 8 },
+  sheetLink: { flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 10 },
+  sheetLinkLabel: { ...type.bodyStrong, color: c.text },
+  sheetLinkHint: { ...type.small, color: c.textMuted },
   sheetTitle: { ...type.display24, color: c.text, marginBottom: 4 },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60 },
   toggleLabel: { ...type.bodyStrong, color: c.text },

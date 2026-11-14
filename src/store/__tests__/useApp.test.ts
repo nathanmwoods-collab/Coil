@@ -11,9 +11,9 @@ vi.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
-import { onTheClock } from '../../engine';
+import { moveRankToTop, onTheClock, toggleExcluded } from '../../engine';
 import { exposureFor } from '../results';
-import { ME, MISSES_FOR_AUTOPILOT, STARTING_BALANCE, useApp, type DraftEntry } from '../useApp';
+import { ME, MISSES_FOR_AUTOPILOT, rankingsFor, STARTING_BALANCE, useApp, type DraftEntry } from '../useApp';
 
 const get = () => useApp.getState();
 const draft = (id: string) => get().drafts[id] as DraftEntry;
@@ -151,5 +151,39 @@ describe('mock deposit', () => {
     expect(get().balance).toBe(STARTING_BALANCE + 50);
     expect(get().deposit(100)).toBe(0);
     expect(get().balance).toBe(STARTING_BALANCE + 150);
+  });
+});
+
+describe('rankings drive autopick', () => {
+  it('autopilot takes the top of my rankings, skipping do-not-draft', () => {
+    get().editRankings('fast12', (r) => moveRankToTop(toggleExcluded(r, 'p_ja_chase'), 'p_tr_kelce'));
+    const id = enter('c_two_minute_drill');
+    get().setAutodraft(id, true);
+    let t = Date.now();
+    for (let i = 0; i < 400 && draft(id).state.picks.length < 24; i++) get().tick((t += 2000));
+    const mine = draft(id).state.picks.filter((p) => p.entrantId === ME);
+    expect(mine.length).toBeGreaterThan(0);
+    const kelce = draft(id).state.picks.find((p) => p.playerId === 'p_tr_kelce');
+    // Kelce goes to me unless a bot reached for him first.
+    if (kelce?.entrantId === ME) expect(mine[0].playerId).toBe('p_tr_kelce');
+    expect(mine.some((p) => p.playerId === 'p_ja_chase')).toBe(false);
+  });
+
+  it('uses a separate list per draft type and resets to ADP', () => {
+    get().editRankings('slow12', (r) => moveRankToTop(r, 'p_jo_allen'));
+    expect(rankingsFor(get().rankings, 'slow12').order[0]).toBe('p_jo_allen');
+    expect(rankingsFor(get().rankings, 'fast12').order[0]).toBe('p_ja_chase');
+    get().resetRankings('slow12');
+    expect(get().rankings.slow12).toBeUndefined();
+  });
+
+  it('the queue still beats rankings', () => {
+    get().editRankings('fast12', (r) => moveRankToTop(r, 'p_tr_kelce'));
+    const id = enter('c_two_minute_drill');
+    get().toggleQueue(id, 'p_da_njoku');
+    get().setAutodraft(id, true);
+    let t = Date.now();
+    for (let i = 0; i < 400 && !draft(id).state.picks.some((p) => p.entrantId === ME); i++) get().tick((t += 2000));
+    expect(draft(id).state.picks.find((p) => p.entrantId === ME)?.playerId).toBe('p_da_njoku');
   });
 });
