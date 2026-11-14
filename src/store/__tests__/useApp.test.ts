@@ -13,7 +13,7 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 
 import { moveRankToTop, onTheClock, toggleExcluded } from '../../engine';
 import { exposureFor } from '../results';
-import { ME, MISSES_FOR_AUTOPILOT, rankingsFor, STARTING_BALANCE, useApp, type DraftEntry } from '../useApp';
+import { ME, MISSES_FOR_AUTOPILOT, rankingsFor, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
 
 const get = () => useApp.getState();
 const draft = (id: string) => get().drafts[id] as DraftEntry;
@@ -228,5 +228,18 @@ describe('multi-entry', () => {
       expect(mine.some((p) => p.playerId === 'p_ja_chase')).toBe(false);
       expect(draft(id).autopilot).toBe(false);
     }
+  });
+});
+
+describe('team names', () => {
+  it('defaults to Entry N and can be renamed in bulk', () => {
+    const r = get().enterContest('c_two_minute_drill', { count: 2 });
+    if (!r.ok) throw new Error(r.error);
+    const [a, b] = r.draftIds;
+    expect([teamName(draft(a)), teamName(draft(b))]).toEqual(['Entry 1', 'Entry 2']);
+    get().renameTeams({ [a]: '  Zero RB · #1 ', [b]: 'Zero RB · #2', nope: 'x' });
+    expect([teamName(draft(a)), teamName(draft(b))]).toEqual(['Zero RB · #1', 'Zero RB · #2']);
+    get().renameTeams({ [a]: '   ' });
+    expect(teamName(draft(a))).toBe('Entry 1');
   });
 });

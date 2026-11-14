@@ -2,11 +2,12 @@ import { router } from 'expo-router';
 import { memo, useMemo, useState } from 'react';
 import { FlatList, SectionList, Text, View } from 'react-native';
 
-import { ChevronRight } from '../../components/icons';
+import { Check, ChevronRight } from '../../components/icons';
 import { SnakeFill } from '../../components/SnakeFill';
 import { Button, Card, Empty, formatMoney, formatPts, ordinal, relativeDay, Screen, Segmented, Tap } from '../../components/ui';
 import { SEASON_WEEKS } from '../../data';
 import { groupBy, liveSummary, onTheClock, picksUntilTurn, POSITIONS, totalPicks } from '../../engine';
+import { setRenameSelection } from '../../lib/renameSelection';
 import { liveTeam, type LiveTeam } from '../../store/results';
 import { contestById, ME, teamName, useApp, type DraftEntry } from '../../store/useApp';
 import { fonts, type } from '../../theme/type';
@@ -25,6 +26,19 @@ export default function Drafts() {
   const [tab, setTab] = useState<Tab>(active.length || !done.length ? 'active' : 'live');
   const teams = useMemo(() => (tab === 'active' ? [] : done.map((d) => liveTeam(d, tab === 'results' ? SEASON_WEEKS : week))), [done, week, tab]);
   const seasonOver = week >= SEASON_WEEKS;
+  // Rename mode: rows turn into checkboxes on Completed and Live.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const canRename = (tab === 'completed' || tab === 'live') && teams.length > 0;
+  const selecting = canRename && picked !== null;
+  const toggle = (ids: string[]) =>
+    setPicked((cur) => {
+      const next = new Set(cur ?? []);
+      const allIn = ids.every((id) => next.has(id));
+      for (const id of ids) allIn ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const sel: Selection | undefined = selecting ? { picked: picked!, toggle } : undefined;
+  const count = selecting ? teams.filter((t) => picked!.has(t.id)).length : 0;
 
   const findPod = <Button small label="Find a pod" onPress={() => router.navigate('/')} />;
 
@@ -34,7 +48,10 @@ export default function Drafts() {
         <Text style={s.title}>Your drafts</Text>
         <Segmented<Tab>
           value={tab}
-          onChange={setTab}
+          onChange={(t) => {
+            setTab(t);
+            setPicked(null);
+          }}
           options={[
             { key: 'active', label: 'Active', badge: active.length },
             { key: 'completed', label: 'Completed' },
@@ -42,6 +59,24 @@ export default function Drafts() {
             { key: 'results', label: 'Results' },
           ]}
         />
+        {canRename ? (
+          <View style={s.tools}>
+            {selecting ? (
+              <>
+                <Tap accessibilityRole="button" onPress={() => toggle(teams.map((t) => t.id))} style={s.tool} testID="select-all">
+                  <Text style={s.toolText}>{count === teams.length ? 'Clear all' : 'Select all'}</Text>
+                </Tap>
+                <Tap accessibilityRole="button" onPress={() => setPicked(null)} style={s.tool} testID="select-cancel">
+                  <Text style={s.toolText}>Cancel</Text>
+                </Tap>
+              </>
+            ) : (
+              <Tap accessibilityRole="button" onPress={() => setPicked(new Set())} style={s.tool} testID="rename-teams">
+                <Text style={s.toolText}>Rename teams</Text>
+              </Tap>
+            )}
+          </View>
+        ) : null}
       </View>
       {tab === 'active' ? (
         <FlatList
@@ -56,11 +91,12 @@ export default function Drafts() {
           data={teams}
           keyExtractor={(t) => t.id}
           contentContainerStyle={s.list}
-          renderItem={({ item }) => <CompletedRow t={item} />}
+          extraData={picked}
+          renderItem={({ item }) => <CompletedRow t={item} sel={sel} />}
           ListEmptyComponent={<Empty title="No teams in the books." body="Finish a draft and it lands here." action={findPod} />}
         />
       ) : tab === 'live' ? (
-        <LiveView teams={teams} week={week} empty={<Empty title="No teams in the season yet." body="Finish a draft and it starts scoring here." action={findPod} />} />
+        <LiveView teams={teams} week={week} sel={sel} empty={<Empty title="No teams in the season yet." body="Finish a draft and it starts scoring here." action={findPod} />} />
       ) : seasonOver ? (
         <FlatList
           data={teams}
@@ -76,7 +112,42 @@ export default function Drafts() {
           action={<Button small variant="secondary" label="See live standings" onPress={() => setTab('live')} />}
         />
       )}
+      {selecting ? (
+        <View style={s.bar}>
+          <Text style={s.barText}>{count === 0 ? 'Tap the teams to name.' : `${count} ${count === 1 ? 'team' : 'teams'} picked`}</Text>
+          <Button
+            small
+            testID="rename-next"
+            label={count > 1 ? `Name ${count} teams` : 'Name team'}
+            disabled={count === 0}
+            onPress={() => {
+              setRenameSelection(teams.filter((t) => picked!.has(t.id)).map((t) => t.id));
+              setPicked(null);
+              router.push('/rename');
+            }}
+          />
+        </View>
+      ) : null}
     </Screen>
+  );
+}
+
+interface Selection {
+  picked: Set<string>;
+  toggle: (ids: string[]) => void;
+}
+
+function Tick({ on }: { on: boolean }) {
+  const c = useColors();
+  return (
+    <View
+      style={{
+        width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
+        borderColor: on ? c.primary : c.border, backgroundColor: on ? c.primary : 'transparent',
+      }}
+    >
+      {on ? <Check color={c.primaryText} size={14} /> : null}
+    </View>
   );
 }
 
@@ -124,12 +195,18 @@ const PosDots = memo(function PosDots({ counts }: { counts: LiveTeam['counts'] }
   );
 });
 
-function CompletedRow({ t }: { t: LiveTeam }) {
+function CompletedRow({ t, sel }: { t: LiveTeam; sel?: Selection }) {
   const s = useStyles();
   const c = useColors();
+  const on = !!sel?.picked.has(t.id);
   const contest = contestById(t.contestId);
   return (
-    <Card onPress={() => router.push(`/draft/${t.id}`)} style={s.row} testID={`completed-${t.id}`}>
+    <Card
+      onPress={() => (sel ? sel.toggle([t.id]) : router.push(`/draft/${t.id}`))}
+      style={[s.row, on && { borderWidth: 1, borderColor: c.primary }]}
+      testID={`completed-${t.id}`}
+    >
+      {sel ? <Tick on={on} /> : null}
       <View style={{ flex: 1, gap: 4 }}>
         <Text style={s.name} numberOfLines={1}>
           {t.name}
@@ -139,7 +216,7 @@ function CompletedRow({ t }: { t: LiveTeam }) {
         </Text>
         <PosDots counts={t.counts} />
       </View>
-      <ChevronRight color={c.textMuted} size={20} />
+      {sel ? null : <ChevronRight color={c.textMuted} size={20} />}
     </Card>
   );
 }
@@ -167,7 +244,7 @@ function ResultRow({ t }: { t: LiveTeam }) {
   );
 }
 
-function LiveView({ teams, week, empty }: { teams: LiveTeam[]; week: number; empty: React.ReactElement }) {
+function LiveView({ teams, week, sel, empty }: { teams: LiveTeam[]; week: number; sel?: Selection; empty: React.ReactElement }) {
   const s = useStyles();
   const c = useColors();
   const sum = useMemo(() => liveSummary(teams.map((t) => ({ fee: t.fee, winning: t.winning }))), [teams]);
@@ -188,6 +265,7 @@ function LiveView({ teams, week, empty }: { teams: LiveTeam[]; week: number; emp
       sections={sections}
       keyExtractor={(t) => t.id}
       stickySectionHeadersEnabled={false}
+      extraData={sel?.picked}
       contentContainerStyle={s.list}
       ListHeaderComponent={
         <View style={s.overview} testID="live-overview">
@@ -211,14 +289,30 @@ function LiveView({ teams, week, empty }: { teams: LiveTeam[]; week: number; emp
           <Text style={s.meta}>
             {section.data.length} {section.data.length === 1 ? 'entry' : 'entries'} · winning {formatMoney(section.winning)}
           </Text>
-          <Tap accessibilityRole="link" onPress={() => router.navigate('/exposure')} style={s.exposure} scaleTo={0.99} testID={`exposure-${section.key}`}>
-            <Text style={s.exposureText}>Exposure</Text>
-            <ChevronRight color={c.textMuted} size={18} />
-          </Tap>
+          {sel ? (
+            <Tap accessibilityRole="button" onPress={() => sel.toggle(section.data.map((t) => t.id))} style={s.exposure} scaleTo={0.99} testID={`select-group-${section.key}`}>
+              <Text style={s.exposureText}>
+                {section.data.every((t) => sel.picked.has(t.id)) ? 'Clear this contest' : `Select all ${section.data.length} here`}
+              </Text>
+            </Tap>
+          ) : (
+            <Tap accessibilityRole="link" onPress={() => router.navigate('/exposure')} style={s.exposure} scaleTo={0.99} testID={`exposure-${section.key}`}>
+              <Text style={s.exposureText}>Exposure</Text>
+              <ChevronRight color={c.textMuted} size={18} />
+            </Tap>
+          )}
         </View>
       )}
       renderItem={({ item: t }) => (
-        <Tap accessibilityRole="button" onPress={() => router.push(`/results/${t.id}`)} style={s.team} scaleTo={0.99} testID={`live-${t.id}`}>
+        <Tap
+          accessibilityRole={sel ? 'checkbox' : 'button'}
+          accessibilityState={sel ? { checked: sel.picked.has(t.id) } : undefined}
+          onPress={() => (sel ? sel.toggle([t.id]) : router.push(`/results/${t.id}`))}
+          style={s.team}
+          scaleTo={0.99}
+          testID={`live-${t.id}`}
+        >
+          {sel ? <Tick on={sel.picked.has(t.id)} /> : null}
           <View style={s.rank}>
             <Text style={s.rankNum}>{t.rank ? ordinal(t.rank) : '–'}</Text>
             <Text style={s.rankOf}>of {t.of}</Text>
@@ -256,6 +350,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 const useStyles = makeStyles((c) => ({
   header: { padding: 16, paddingBottom: 0, gap: 8 },
   title: { ...type.display40, color: c.text },
+  tools: { flexDirection: 'row', justifyContent: 'flex-end', gap: 4, marginBottom: -8 },
+  tool: { minHeight: 40, paddingHorizontal: 8, justifyContent: 'center' },
+  toolText: { ...type.smallStrong, color: c.textMuted },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg },
+  barText: { ...type.small, color: c.textMuted, flex: 1 },
   list: { padding: 16, gap: 10, paddingBottom: 32 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 72 },
   name: { ...type.bodyStrong, color: c.text },

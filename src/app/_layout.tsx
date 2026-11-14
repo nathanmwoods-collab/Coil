@@ -61,6 +61,7 @@ export default function RootLayout() {
           <Stack.Screen name="deposit" options={{ presentation: 'modal' }} />
           <Stack.Screen name="promo/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="rankings" />
+          <Stack.Screen name="rename" options={{ presentation: 'modal' }} />
           <Stack.Screen name="draft/[id]" options={{ gestureEnabled: false }} />
           <Stack.Screen name="results/[id]" />
         </Stack>

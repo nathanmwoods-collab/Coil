@@ -15,6 +15,7 @@ import {
   entryLimit,
   entryTotal,
   makePick,
+  MAX_TEAM_NAME,
   mulberry32,
   onTheClock,
   reconcileRankings,
@@ -87,6 +88,8 @@ interface AppState {
 
   addFunds: (amount: number) => void;
   setWeek: (week: number) => void;
+  /** Set team names in bulk: draft id -> name. An empty name goes back to "Entry N". */
+  renameTeams: (names: Record<string, string>) => void;
   /** Apply an edit (move, exclude, tier break) to one draft type's rankings. */
   editRankings: (type: DraftType, edit: (r: Rankings) => Rankings) => void;
   resetRankings: (type: DraftType) => void;
@@ -215,6 +218,18 @@ export const useApp = create<AppState>()(
       addFunds: (amount) => set((s) => ({ balance: Math.round((s.balance + amount) * 100) / 100 })),
 
       setWeek: (week) => set({ currentWeek: Math.max(0, Math.min(SEASON_WEEKS, Math.round(week))) }),
+
+      renameTeams: (names) =>
+        set((s) => {
+          const drafts = { ...s.drafts };
+          for (const id in names) {
+            const d = drafts[id];
+            if (!d) continue;
+            const name = names[id].trim().slice(0, MAX_TEAM_NAME);
+            drafts[id] = { ...d, name: name || undefined };
+          }
+          return { drafts };
+        }),
 
       editRankings: (type, edit) =>
         set((s) => {

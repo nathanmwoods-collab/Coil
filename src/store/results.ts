@@ -1,6 +1,9 @@
 import { payoutTable, PLAYER_MAP, PLAYERS, SEASON_WEEKS, simulateSeason, simulateTournament } from '../data';
 import {
+  archetype,
   exposure,
+  primaryStack,
+  type NameContext,
   isAdvancing,
   optimalLineup,
   podStandings,
@@ -121,8 +124,10 @@ export function teamIdentity(state: DraftEntry['state'], entrantId: string = ME)
   const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
   for (const x of picks) counts[x.player.position]++;
 
-  const earlyRb = picks.filter((x) => x.pick.round <= 6 && x.player.position === 'RB').length;
-  const build: BuildName = earlyRb === 0 ? 'Zero RB' : earlyRb === 1 ? 'Hero RB' : earlyRb >= 3 ? 'Robust RB' : 'Balanced';
+  const build: BuildName = archetype(
+    picks.map((x) => ({ round: x.pick.round, position: x.player.position })),
+    state.config.rounds,
+  );
 
   let stack: string | null = null;
   let bestScore = -1;
@@ -199,5 +204,22 @@ export function liveTeam(d: DraftEntry, week: number): LiveTeam {
     advancing: isAdvancing(rank, table),
     counts,
     createdAt: d.createdAt,
+  };
+}
+
+/** Everything `formatTeamName` needs to name a completed (or in-progress) team. */
+export function namingContext(d: DraftEntry): NameContext {
+  const picks = rosterOf(d.state, ME)
+    .map((p) => ({ round: p.round, player: PLAYER_BY_ID.get(p.playerId) }))
+    .filter((x): x is { round: number; player: Player } => !!x.player);
+  const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const x of picks) counts[x.player.position]++;
+  return {
+    counts,
+    archetype: archetype(picks.map((x) => ({ round: x.round, position: x.player.position })), d.state.config.rounds),
+    stack: primaryStack(picks.map((x) => x.player)),
+    draftedAt: d.createdAt,
+    contestName: contestById(d.contestId)?.name ?? 'Draft',
+    slot: d.state.entrants.findIndex((e) => e.id === ME) + 1,
   };
 }
