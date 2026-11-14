@@ -187,3 +187,46 @@ describe('rankings drive autopick', () => {
     expect(draft(id).state.picks.find((p) => p.entrantId === ME)?.playerId).toBe('p_da_njoku');
   });
 });
+
+describe('multi-entry', () => {
+  it('creates N drafts and charges N fees', () => {
+    const r = get().enterContest('c_two_minute_drill', { count: 3 });
+    if (!r.ok) throw new Error(r.error);
+    expect(new Set(r.draftIds).size).toBe(3);
+    expect(Object.keys(get().drafts)).toHaveLength(3);
+    expect(get().balance).toBe(STARTING_BALANCE - 30);
+    expect(get().entries.c_two_minute_drill).toBe(3);
+    expect(r.draftIds.every((id) => !draft(id).background && !draft(id).autodraft)).toBe(true);
+  });
+
+  it('refuses more than the cap, the seats or the balance allow, charging nothing', () => {
+    expect(get().enterContest('c_two_minute_drill', { count: 21 }).ok).toBe(false);
+    expect(get().enterContest('c_rookie_camp', { count: 2 }).ok).toBe(false);
+    useApp.setState({ balance: 25 });
+    const r = get().enterContest('c_two_minute_drill', { count: 3 });
+    expect(r).toEqual({ ok: false, error: "You're $5 short (mock). Add funds first." });
+    expect(get().balance).toBe(25);
+    expect(Object.keys(get().drafts)).toHaveLength(0);
+  });
+
+  it('autodrafts every entry to completion in the background from rankings', () => {
+    get().editRankings('fast12', (r) => toggleExcluded(r, 'p_ja_chase'));
+    const r = get().enterContest('c_two_minute_drill', { count: 2, autodraft: true });
+    if (!r.ok) throw new Error(r.error);
+    let t = Date.now();
+    let passes = 0;
+    while (r.draftIds.some((id) => draft(id).state.status !== 'complete') && passes < 60) {
+      get().tick((t += 200));
+      passes++;
+    }
+    // 216 picks at 12 per pass: done in 18 passes of the 200ms ticker.
+    expect(passes).toBeLessThanOrEqual(20);
+    for (const id of r.draftIds) {
+      const mine = draft(id).state.picks.filter((p) => p.entrantId === ME);
+      expect(mine).toHaveLength(18);
+      expect(mine.every((p) => p.auto)).toBe(true);
+      expect(mine.some((p) => p.playerId === 'p_ja_chase')).toBe(false);
+      expect(draft(id).autopilot).toBe(false);
+    }
+  });
+});

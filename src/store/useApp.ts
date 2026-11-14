@@ -12,6 +12,8 @@ import {
   DEFAULT_LINEUP,
   draftedIds,
   draftTypeOf,
+  entryLimit,
+  entryTotal,
   makePick,
   mulberry32,
   onTheClock,
@@ -43,6 +45,18 @@ export interface DraftEntry {
   missed: number;
   /** Turned on by the system after repeated missed picks (slow drafts). */
   autopilot: boolean;
+  /** Entered as "autodraft from my rankings": runs to completion in the background, no pick clocks. */
+  background?: boolean;
+}
+
+/** Picks a background autodraft makes per ticker pass (200ms): a pod finishes in a few seconds. */
+export const BACKGROUND_PICKS_PER_TICK = 12;
+
+export interface EnterOptions {
+  /** Number of entries (drafts) to create. Default 1. */
+  count?: number;
+  /** Autodraft every one of them from the user's rankings, in the background. */
+  autodraft?: boolean;
 }
 
 export type BotSpeed = 'normal' | 'fast';
@@ -70,7 +84,10 @@ interface AppState {
   resetRankings: (type: DraftType) => void;
   /** Mock deposit: adds the amount plus any first-deposit match. Returns the bonus. */
   deposit: (amount: number) => number;
-  enterContest: (contestId: string) => { ok: true; draftId: string } | { ok: false; error: string };
+  enterContest: (
+    contestId: string,
+    opts?: EnterOptions,
+  ) => { ok: true; draftId: string; draftIds: string[] } | { ok: false; error: string };
   draftPlayer: (draftId: string, playerId: string, now?: number) => string | null;
   toggleQueue: (draftId: string, playerId: string) => void;
   moveQueue: (draftId: string, playerId: string, dir: -1 | 1) => void;
@@ -138,6 +155,8 @@ function stepDraft(
   const clock = onTheClock(st);
   if (!clock) return null;
   const lastAt = st.picks.length ? st.picks[st.picks.length - 1].at : d.createdAt;
+
+  if (d.background) botDelay = 0;
 
   if (clock.isBot) {
     if (now - lastAt < botDelay) return null;
@@ -207,45 +226,56 @@ export const useApp = create<AppState>()(
         return bonus;
       },
 
-      enterContest: (contestId) => {
+      enterContest: (contestId, opts = {}) => {
         const s = get();
         // Entering before persisted state loads would be overwritten by rehydration.
         if (!s.hydrated) return { ok: false, error: 'One sec, still loading.' };
         const c = contestById(contestId);
         if (!c) return { ok: false, error: 'Contest not found' };
+        const count = Math.max(1, Math.floor(opts.count ?? 1));
         const mine = s.entries[c.id] ?? 0;
-        if (mine >= c.maxPerUser) return { ok: false, error: `Max ${c.maxPerUser} entries reached` };
-        if (c.filled + mine >= c.maxEntries) return { ok: false, error: 'Contest is full' };
-        if (s.balance < c.entryFee) return { ok: false, error: `You're ${formatShort(c.entryFee - s.balance)} short (mock). Top up in You.` };
+        const limit = entryLimit(c, mine, s.balance);
+        if (limit.perUserLeft < 1) return { ok: false, error: `Max ${c.maxPerUser} entries reached` };
+        if (limit.seatsLeft < 1) return { ok: false, error: 'Contest is full' };
+        if (count > limit.perUserLeft) return { ok: false, error: `You have ${limit.perUserLeft} of ${c.maxPerUser} entries left here.` };
+        if (count > limit.seatsLeft) return { ok: false, error: `Only ${limit.seatsLeft} seats left.` };
+        const total = entryTotal(c.entryFee, count);
+        if (s.balance < total) return { ok: false, error: `You're ${formatShort(total - s.balance)} short (mock). Add funds first.` };
 
         const now = Date.now();
-        // Two entries in the same millisecond must not share (and overwrite) one draft.
-        let id = `${c.id}-${now.toString(36)}`;
-        for (let n = 2; s.drafts[id]; n++) id = `${c.id}-${now.toString(36)}-${n}`;
-        const seed = hashString(id);
-        const rand = mulberry32(seed);
-        const mySlot = Math.floor(rand() * c.teams);
-        const names = [...BOT_NAMES].sort(() => rand() - 0.5);
-        const entrants: Entrant[] = Array.from({ length: c.teams }, (_, i) =>
-          i === mySlot
-            ? { id: ME, name: 'You', isBot: false }
-            : { id: `bot${i}`, name: names[i % names.length] + (i >= names.length ? i : ''), isBot: true },
-        );
-        const state = createDraft(
-          { id, contestId: c.id, teams: c.teams, rounds: c.rounds, pickClockSec: c.pickClockSec, lineup: DEFAULT_LINEUP },
-          entrants,
-          now,
-        );
-        const entry: DraftEntry = {
-          id, contestId: c.id, entryFee: c.entryFee, createdAt: now, seed, state,
-          queue: [], autodraft: false, missed: 0, autopilot: false,
-        };
+        const drafts = { ...s.drafts };
+        const draftIds: string[] = [];
+        for (let k = 0; k < count; k++) {
+          // Entries made in the same millisecond must not share (and overwrite) one draft.
+          let id = `${c.id}-${now.toString(36)}`;
+          for (let n = 2; drafts[id]; n++) id = `${c.id}-${now.toString(36)}-${n}`;
+          const seed = hashString(id);
+          const rand = mulberry32(seed);
+          const mySlot = Math.floor(rand() * c.teams);
+          const names = [...BOT_NAMES].sort(() => rand() - 0.5);
+          const entrants: Entrant[] = Array.from({ length: c.teams }, (_, i) =>
+            i === mySlot
+              ? { id: ME, name: 'You', isBot: false }
+              : { id: `bot${i}`, name: names[i % names.length] + (i >= names.length ? i : ''), isBot: true },
+          );
+          const state = createDraft(
+            { id, contestId: c.id, teams: c.teams, rounds: c.rounds, pickClockSec: c.pickClockSec, lineup: DEFAULT_LINEUP },
+            entrants,
+            now,
+          );
+          drafts[id] = {
+            id, contestId: c.id, entryFee: c.entryFee, createdAt: now + k, seed, state,
+            queue: [], autodraft: !!opts.autodraft, missed: 0, autopilot: false,
+            ...(opts.autodraft ? { background: true } : {}),
+          };
+          draftIds.push(id);
+        }
         set({
-          balance: Math.round((s.balance - c.entryFee) * 100) / 100,
-          drafts: { ...s.drafts, [id]: entry },
-          entries: { ...s.entries, [c.id]: mine + 1 },
+          balance: Math.round((s.balance - total) * 100) / 100,
+          drafts,
+          entries: { ...s.entries, [c.id]: mine + count },
         });
-        return { ok: true, draftId: id };
+        return { ok: true, draftId: draftIds[0], draftIds };
       },
 
       draftPlayer: (draftId, playerId, now = Date.now()) => {
@@ -309,12 +339,21 @@ export const useApp = create<AppState>()(
         const delay = BOT_DELAY_MS[s.botSpeed];
         let next: Record<string, DraftEntry> | null = null;
         for (const id in s.drafts) {
-          const d = s.drafts[id];
+          let d = s.drafts[id];
           if (d.state.status !== 'drafting') continue;
-          const stepped = stepDraft(d, now, delay, s.rankings);
-          if (stepped) {
+          // Background autodrafts take several picks per pass so a pod wraps up in seconds.
+          const steps = d.background ? BACKGROUND_PICKS_PER_TICK : 1;
+          let changed = false;
+          for (let k = 0; k < steps; k++) {
+            const stepped = stepDraft(d, now, delay, s.rankings);
+            if (!stepped) break;
+            d = stepped;
+            changed = true;
+            if (d.state.status !== 'drafting') break;
+          }
+          if (changed) {
             next = next ?? { ...s.drafts };
-            next[id] = stepped;
+            next[id] = d;
           }
         }
         if (next) set({ drafts: next });

@@ -2,10 +2,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
-import { Close } from '../../components/icons';
+import { Check, Close } from '../../components/icons';
 import { Button, clockLabel, Empty, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
 import { isSitAndGo } from '../../data';
-import { DEFAULT_LINEUP } from '../../engine';
+import { clampEntries, DEFAULT_LINEUP, DRAFT_TYPES, draftTypeOf, entryLimit, entryTotal } from '../../engine';
 import { feel } from '../../lib/feel';
 import { contestById, MISSES_FOR_AUTOPILOT, useApp } from '../../store/useApp';
 import { fonts, type } from '../../theme/type';
@@ -20,6 +20,8 @@ export default function ContestDetail() {
   const mine = useApp((st) => (contest ? st.entries[contest.id] ?? 0 : 0));
   const enterContest = useApp((st) => st.enterContest);
   const [error, setError] = useState<string | null>(null);
+  const [count, setCount] = useState(1);
+  const [mode, setMode] = useState<'self' | 'auto'>('self');
   // A double-tap fires onPress twice before navigation; only the first may enter (and charge).
   const entering = useRef(false);
 
@@ -32,15 +34,21 @@ export default function ContestDetail() {
   }
 
   const filled = Math.min(contest.maxEntries, contest.filled + mine);
-  const canAfford = balance >= contest.entryFee;
-  const atMax = mine >= contest.maxPerUser;
-  const short = Math.round((contest.entryFee - balance) * 100) / 100;
+  const limit = entryLimit(contest, mine, balance);
+  const atMax = limit.perUserLeft < 1;
+  const full = limit.seatsLeft < 1;
+  const n = clampEntries(count, limit);
+  const total = entryTotal(contest.entryFee, n);
+  const canAfford = balance >= total;
+  const short = Math.round((total - balance) * 100) / 100;
   const lineup = DEFAULT_LINEUP;
   const sitGo = isSitAndGo(contest);
+  const multi = contest.maxPerUser > 1;
+  const listName = DRAFT_TYPES.find((t) => t.key === draftTypeOf(contest))?.label.toLowerCase() ?? '';
 
   const onEnter = () => {
     if (entering.current) return;
-    const r = enterContest(contest.id);
+    const r = enterContest(contest.id, { count: n, autodraft: mode === 'auto' });
     if (!r.ok) {
       feel.pickRejected();
       return setError(r.error);
@@ -48,8 +56,23 @@ export default function ContestDetail() {
     entering.current = true;
     feel.entered();
     setError(null);
-    router.replace(`/draft/${r.draftId}`);
+    // One hand-drafted entry goes straight to the room. Anything else lands on the Drafts tab.
+    if (mode === 'self' && r.draftIds.length === 1) router.replace(`/draft/${r.draftId}`);
+    else {
+      router.back();
+      router.navigate('/drafts');
+    }
   };
+
+  const cta = atMax
+    ? `All ${contest.maxPerUser} of your entries are in`
+    : full
+      ? 'This one is full'
+      : mode === 'auto'
+        ? `Autodraft ${n === 1 ? '' : `${n} `}for ${formatMoney(total)}`
+        : n === 1
+          ? `Draft for ${formatMoney(total)}`
+          : `Enter ${n} for ${formatMoney(total)}`;
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -83,6 +106,68 @@ export default function ContestDetail() {
           <Fact label="Your entries" value={`${mine} of ${contest.maxPerUser}`} highlight={mine > 0} />
         </View>
 
+        {atMax || full ? null : (
+          <View style={s.section}>
+            {multi ? (
+              <View style={s.stepRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.sectionTitle}>Entries</Text>
+                  <Text style={s.stepHint}>
+                    {limit.max <= n
+                      ? limit.boundBy === 'balance'
+                        ? `Your balance covers ${limit.max}.`
+                        : limit.boundBy === 'seats'
+                          ? `Only ${limit.seatsLeft} seats left.`
+                          : `${limit.perUserLeft} of ${contest.maxPerUser} left for you.`
+                      : `Up to ${limit.max} right now.`}
+                  </Text>
+                </View>
+                <View style={s.stepper}>
+                  <Tap
+                    accessibilityRole="button"
+                    accessibilityLabel="One fewer entry"
+                    disabled={n <= 1}
+                    onPress={() => setCount(n - 1)}
+                    style={s.stepBtn}
+                    testID="entries-minus"
+                  >
+                    <Text style={[s.stepSign, n <= 1 && { color: c.border }]}>−</Text>
+                  </Tap>
+                  <Text style={s.stepValue} testID="entries-count" accessibilityLabel={`${n} entries`}>
+                    {n}
+                  </Text>
+                  <Tap
+                    accessibilityRole="button"
+                    accessibilityLabel="One more entry"
+                    disabled={n >= limit.max}
+                    onPress={() => setCount(n + 1)}
+                    style={s.stepBtn}
+                    testID="entries-plus"
+                  >
+                    <Text style={[s.stepSign, n >= limit.max && { color: c.border }]}>+</Text>
+                  </Tap>
+                </View>
+              </View>
+            ) : null}
+            <View accessibilityRole="radiogroup" style={s.modes}>
+              <Mode
+                on={mode === 'self'}
+                label={n === 1 ? 'Draft it myself' : 'Draft them myself'}
+                hint={n === 1 ? 'Straight to the room.' : `${n} pods open at once. Find them in Drafts.`}
+                onPress={() => setMode('self')}
+                testID="mode-self"
+              />
+              <Mode
+                on={mode === 'auto'}
+                label="Autodraft from my rankings"
+                hint={`Uses your ${listName} list. Done in seconds.`}
+                onPress={() => setMode('auto')}
+                testID="mode-auto"
+              />
+            </View>
+          </View>
+        )}
+
         <View style={s.section}>
           <Text style={s.sectionTitle}>Draft once. That's the whole job.</Text>
           <Text style={s.p}>
@@ -99,23 +184,45 @@ export default function ContestDetail() {
       <View style={s.footer}>
         {error ? <Text style={s.error}>{error}</Text> : null}
         <View style={s.balanceRow}>
-          <Text style={s.label}>Mock balance</Text>
+          <Text style={s.label}>
+            {n > 1 ? `${n} × ${formatMoney(contest.entryFee)} · ` : ''}Mock balance
+          </Text>
           <Text style={[s.balance, { color: canAfford ? c.text : c.danger }]}>{formatMoney(balance)}</Text>
         </View>
-        <Button
-          testID="enter-contest"
-          label={
-            atMax
-              ? `All ${contest.maxPerUser} of your entries are in`
-              : canAfford
-                ? `Draft for ${formatMoney(contest.entryFee)}`
-                : `You're ${formatMoney(short)} short (mock). Top up in You.`
-          }
-          onPress={onEnter}
-          disabled={atMax || !canAfford}
-        />
+        {!atMax && !full && !canAfford ? (
+          <>
+            <Text style={s.short}>You're {formatMoney(short)} short (mock).</Text>
+            <Button testID="contest-deposit" label="Add funds" onPress={() => router.push('/deposit')} />
+          </>
+        ) : (
+          <Button testID="enter-contest" label={cta} onPress={onEnter} disabled={atMax || full} />
+        )}
       </View>
     </Screen>
+  );
+}
+
+function Mode({ on, label, hint, onPress, testID }: { on: boolean; label: string; hint: string; onPress: () => void; testID: string }) {
+  const s = useStyles();
+  const c = useColors();
+  return (
+    <Tap
+      accessibilityRole="radio"
+      accessibilityState={{ checked: on }}
+      onPress={() => {
+        if (!on) feel.select();
+        onPress();
+      }}
+      scaleTo={0.99}
+      style={[s.mode, on && { borderColor: c.text, backgroundColor: c.surface }]}
+      testID={testID}
+    >
+      <View style={[s.radio, on && { borderColor: c.text }]}>{on ? <Check color={c.text} size={14} /> : null}</View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.modeLabel}>{label}</Text>
+        <Text style={s.stepHint}>{hint}</Text>
+      </View>
+    </Tap>
   );
 }
 
@@ -148,6 +255,17 @@ const useStyles = makeStyles((c) => ({
   section: { gap: 10 },
   sectionTitle: { ...type.title, color: c.text },
   p: { ...type.body, color: c.textMuted, lineHeight: 22 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepHint: { ...type.small, color: c.textMuted },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, borderWidth: 1, borderColor: c.border },
+  stepBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  stepSign: { fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: c.text },
+  stepValue: { fontFamily: fonts.display, fontSize: 28, lineHeight: 30, color: c.text, minWidth: 36, textAlign: 'center' },
+  modes: { gap: 8 },
+  mode: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: c.border },
+  modeLabel: { ...type.bodyStrong, color: c.text },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+  short: { ...type.smallStrong, color: c.danger, marginBottom: 8 },
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg },
   error: { ...type.smallStrong, color: c.danger, marginBottom: 8 },
   balanceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
