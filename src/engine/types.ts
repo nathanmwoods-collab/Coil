@@ -67,6 +67,8 @@ export interface Contest {
   name: string;
   entryFee: number; // display only; mock currency
   prizePool: number;
+  /** Share of every entry fee Coil keeps, in percent (12 means 12%). Published on the contest sheet. */
+  rakePct: number;
   maxEntries: number;
   maxPerUser: number;
   teams: number;
