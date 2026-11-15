@@ -148,15 +148,15 @@ describe('weekly payout', () => {
     const w2 = nextPayout(w1);
     const accruals = [
       { amount: 0.048, payOn: w1 },
-      { amount: 0.3, payOn: w1 },
+      { amount: 0.3, payOn: w1, count: 3 },
       { amount: 1, payOn: w1, paidAt: w1 },
       { amount: 0.5, payOn: w2 },
     ];
     expect(pendingSpringback(accruals)).toBe(0.848);
     expect(payoutsDue(accruals, w1 - 1)).toEqual([]);
-    expect(payoutsDue(accruals, w1)).toEqual([{ payOn: w1, amount: 0.35, entries: 2 }]);
+    expect(payoutsDue(accruals, w1)).toEqual([{ payOn: w1, amount: 0.35, entries: 4 }]);
     expect(payoutsDue(accruals, w2)).toEqual([
-      { payOn: w1, amount: 0.35, entries: 2 },
+      { payOn: w1, amount: 0.35, entries: 4 },
       { payOn: w2, amount: 0.5, entries: 1 },
     ]);
   });

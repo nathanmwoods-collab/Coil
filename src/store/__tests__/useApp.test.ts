@@ -288,7 +288,7 @@ describe('Springback', () => {
     expect(get().balance).toBe(STARTING_BALANCE - 100);
     expect(springbackPending(get().sbLedger)).toBe(0);
     expect(get().sbLanded?.amount).toBe(0.48);
-    expect(get().sbLedger[0]).toMatchObject({ kind: 'payout', amount: 0.48, entries: 1 });
+    expect(get().sbLedger[0]).toMatchObject({ kind: 'payout', amount: 0.48, entries: 4 });
     // Another Wednesday with nothing new pays nothing.
     expect(get().advanceToWednesday()).toBe(0);
     expect(get().sbCredit).toBe(0.48);

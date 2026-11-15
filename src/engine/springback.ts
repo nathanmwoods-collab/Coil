@@ -153,6 +153,8 @@ export function planEntries(
 /** One accrual: Springback earned by an entry, waiting for its Wednesday. */
 export interface Accrual {
   amount: number;
+  /** How many entries this accrual covers. Default 1. */
+  count?: number;
   /** Timestamp of the Wednesday this pays on. */
   payOn: number;
   paidAt?: number;
@@ -178,7 +180,7 @@ export function payoutsDue(accruals: readonly Accrual[], now: number): WeeklyPay
     if (a.paidAt != null || a.payOn > now) continue;
     const w = by.get(a.payOn) ?? { sum: 0, entries: 0 };
     w.sum += a.amount;
-    w.entries += 1;
+    w.entries += a.count ?? 1;
     by.set(a.payOn, w);
   }
   return [...by.entries()]

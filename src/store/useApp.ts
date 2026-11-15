@@ -73,6 +73,7 @@ export type SpringbackItem =
       at: number;
       contestId: string;
       contest: string;
+      draftIds: string[];
       count: number;
       fees: number;
       /** Paid with Springback credit. That part earns nothing. */
@@ -454,7 +455,7 @@ export const useApp = create<AppState>()(
           draftIds.push(id);
         }
         const item: SpringbackItem = {
-          kind: 'entry', id: `e-${draftIds[0]}`, at: sbNow, contestId: c.id, contest: c.name, count,
+          kind: 'entry', id: `e-${draftIds[0]}`, at: sbNow, contestId: c.id, contest: c.name, draftIds, count,
           fees: total, fromCredit: plan.fromCredit, rake: plan.earningRake, amount: plan.springback,
           payOn: nextPayout(sbNow),
           // Nothing accrued (all credit): nothing to wait for.
