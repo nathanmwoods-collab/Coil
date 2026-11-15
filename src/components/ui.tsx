@@ -29,6 +29,18 @@ export function formatMoney(n: number, opts: { compact?: boolean } = {}) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: fixed, maximumFractionDigits: 2 })}`;
 }
 
+/** Springback amounts: always to the cent, and honest about anything smaller. */
+export function formatCents(n: number) {
+  if (n > 0 && n < 0.005) return 'under 1¢';
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Rates: 4%, 5.3%. */
+export function formatPct(n: number) {
+  const v = Math.round(n * 10) / 10;
+  return `${Number.isInteger(v) ? v : v.toFixed(1)}%`;
+}
+
 /** Points always carry one decimal. */
 export function formatPts(n: number) {
   return n.toFixed(1);

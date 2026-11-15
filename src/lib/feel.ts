@@ -47,6 +47,8 @@ export const feel = {
   draftComplete: () => run(() => Haptics.notificationAsync(Note.Success)),
   /** Ceiling week revealed. */
   ceiling: () => run(() => Haptics.impactAsync(Impact.Soft)),
+  /** Springback landed: the spring lets go. */
+  landed: () => run(() => Haptics.notificationAsync(Note.Success)),
   /** Autopilot took over. */
   autopilot: () => run(() => Haptics.notificationAsync(Note.Warning)),
 };

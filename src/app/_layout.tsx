@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { SpringbackToast } from '../components/SpringbackToast';
 import { useApp } from '../store/useApp';
 import { useColors } from '../theme/useTheme';
 
@@ -26,6 +27,19 @@ function DraftTicker() {
     const t = setInterval(() => useApp.getState().tick(Date.now()), 200);
     return () => clearInterval(t);
   }, [hasLive]);
+  return null;
+}
+
+/** Pays out Springback when a Wednesday has passed: on launch, then once a minute. MOCK credit only. */
+function SpringbackClock() {
+  const hydrated = useApp((s) => s.hydrated);
+  useEffect(() => {
+    if (!hydrated) return;
+    const run = () => useApp.getState().settleSpringback();
+    run();
+    const t = setInterval(run, 60_000);
+    return () => clearInterval(t);
+  }, [hydrated]);
   return null;
 }
 
@@ -49,6 +63,7 @@ export default function RootLayout() {
     <SafeAreaProvider style={{ backgroundColor: c.bg }}>
       <StatusBar style="light" />
       <DraftTicker />
+      <SpringbackClock />
       {ready ? (
         <Stack
           screenOptions={{
@@ -61,11 +76,13 @@ export default function RootLayout() {
           <Stack.Screen name="deposit" options={{ presentation: 'modal' }} />
           <Stack.Screen name="promo/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="rankings" />
+          <Stack.Screen name="springback" />
           <Stack.Screen name="rename" options={{ presentation: 'modal' }} />
           <Stack.Screen name="draft/[id]" options={{ gestureEnabled: false }} />
           <Stack.Screen name="results/[id]" />
         </Stack>
       ) : null}
+      {ready ? <SpringbackToast /> : null}
     </SafeAreaProvider>
   );
 }
