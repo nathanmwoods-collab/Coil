@@ -18,9 +18,12 @@ import {
   makePick,
   MAX_TEAM_NAME,
   mulberry32,
+  nextPayout,
   onTheClock,
+  planEntries,
   reconcileRankings,
   seedRankings,
+  settleAccruals,
   totalPicks,
   updateAdp,
   type AdpTable,
@@ -58,7 +61,30 @@ export interface DraftEntry {
   background?: boolean;
   /** This draft's picks have been folded into the ADP table. */
   adpCounted?: boolean;
+  /** MOCK Springback this entry accrued when it was entered. 0 for the part paid with credit. */
+  springback?: number;
 }
+
+/** Springback ledger: what each entry accrued, and each Wednesday payout. Newest first. All MOCK. */
+export type SpringbackItem =
+  | {
+      kind: 'entry';
+      id: string;
+      at: number;
+      contestId: string;
+      contest: string;
+      count: number;
+      fees: number;
+      /** Paid with Springback credit. That part earns nothing. */
+      fromCredit: number;
+      /** Rake on the cash part: what moved the gauge. */
+      rake: number;
+      /** Springback accrued. */
+      amount: number;
+      payOn: number;
+      paidAt?: number;
+    }
+  | { kind: 'payout'; id: string; at: number; amount: number; entries: number };
 
 /**
  * MOCK-CLIENT ADP settings. Pods here are one human and bots, so bots are
@@ -137,6 +163,25 @@ interface AppState {
 
   /** ADP learned from completed drafts, per draft type. */
   adp: Partial<Record<DraftType, AdpTable>>;
+
+  /** MOCK Springback: rake paid in cash this season. Sets the gauge. */
+  seasonRake: number;
+  /** MOCK Springback credit that has been paid out. Separate from the cash balance. */
+  sbCredit: number;
+  /** Spend Springback credit before cash when entering. On by default. */
+  useCreditFirst: boolean;
+  sbLedger: SpringbackItem[];
+  /** The latest payout the user hasn't seen yet. Drives the "Springback landed" moment. */
+  sbLanded: { amount: number; at: number } | null;
+  /** Lab only: how far "Advance to Wednesday" has pushed the Springback clock past the real one. */
+  sbSkewMs: number;
+
+  setUseCreditFirst: (on: boolean) => void;
+  /** Pay out every Wednesday that has come. Returns the mock credit paid. */
+  settleSpringback: (now?: number) => number;
+  /** Lab: jump the Springback clock to the next Wednesday and pay it out. */
+  advanceToWednesday: () => number;
+  dismissLanded: () => void;
 
   addFunds: (amount: number) => void;
   setWeek: (week: number) => void;
@@ -262,13 +307,63 @@ const initial = {
   currentWeek: DEFAULT_WEEK,
   adp: {} as Partial<Record<DraftType, AdpTable>>,
   rankings: {} as Partial<Record<DraftType, Rankings>>,
+  seasonRake: 0,
+  sbCredit: 0,
+  useCreditFirst: true,
+  sbLedger: [] as SpringbackItem[],
+  sbLanded: null as { amount: number; at: number } | null,
+  sbSkewMs: 0,
 };
+
+const money = (n: number) => Math.round(n * 100) / 100;
+
+/** Unpaid Springback, waiting for Wednesday. */
+export function springbackPending(ledger: SpringbackItem[]): number {
+  let n = 0;
+  for (const x of ledger) if (x.kind === 'entry' && x.paidAt == null) n += x.amount;
+  return Math.round(n * 1e4) / 1e4;
+}
+
+/** What the user can enter with right now: cash, plus Springback credit when it's set to go first. */
+export function spendable(s: Pick<AppState, 'balance' | 'sbCredit' | 'useCreditFirst'>): number {
+  return money(s.balance + (s.useCreditFirst ? s.sbCredit : 0));
+}
 
 export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
       hydrated: false,
       ...initial,
+
+      setUseCreditFirst: (useCreditFirst) => set({ useCreditFirst }),
+
+      settleSpringback: (now = Date.now() + get().sbSkewMs) => {
+        const s = get();
+        const entries = s.sbLedger.filter((x) => x.kind === 'entry');
+        const { accruals, payouts } = settleAccruals(entries, now);
+        if (accruals === entries) return 0;
+        const paid = money(payouts.reduce((n, w) => n + w.amount, 0));
+        const byId = new Map(accruals.map((a) => [a.id, a]));
+        const ledger: SpringbackItem[] = s.sbLedger.map((x) => byId.get(x.id) ?? x);
+        // Payouts go on top, newest first.
+        for (const w of payouts) ledger.unshift({ kind: 'payout', id: `pay-${w.payOn}-${ledger.length}`, at: w.payOn, amount: w.amount, entries: w.entries });
+        set({
+          sbLedger: ledger,
+          sbCredit: money(s.sbCredit + paid),
+          ...(paid > 0 ? { sbLanded: { amount: money((s.sbLanded?.amount ?? 0) + paid), at: now } } : {}),
+        });
+        return paid;
+      },
+
+      advanceToWednesday: () => {
+        const s = get();
+        const now = Date.now() + s.sbSkewMs;
+        const wed = nextPayout(now);
+        set({ sbSkewMs: s.sbSkewMs + (wed - now) });
+        return get().settleSpringback(wed);
+      },
+
+      dismissLanded: () => set({ sbLanded: null }),
 
       addFunds: (amount) => set((s) => ({ balance: Math.round((s.balance + amount) * 100) / 100 })),
 
@@ -315,15 +410,21 @@ export const useApp = create<AppState>()(
         if (!c) return { ok: false, error: 'Contest not found' };
         const count = Math.max(1, Math.floor(opts.count ?? 1));
         const mine = s.entries[c.id] ?? 0;
-        const limit = entryLimit(c, mine, s.balance);
+        const funds = spendable(s);
+        const limit = entryLimit(c, mine, funds);
         if (limit.perUserLeft < 1) return { ok: false, error: `Max ${c.maxPerUser} entries reached` };
         if (limit.seatsLeft < 1) return { ok: false, error: 'Contest is full' };
         if (count > limit.perUserLeft) return { ok: false, error: `You have ${limit.perUserLeft} of ${c.maxPerUser} entries left here.` };
         if (count > limit.seatsLeft) return { ok: false, error: `Only ${limit.seatsLeft} seats left.` };
         const total = entryTotal(c.entryFee, count);
-        if (s.balance < total) return { ok: false, error: `You're ${formatShort(total - s.balance)} short (mock). Add funds first.` };
+        if (funds < total) return { ok: false, error: `You're ${formatShort(total - funds)} short (mock). Add funds first.` };
+        // Springback credit goes first (unless switched off). The credit-paid part earns nothing.
+        const plan = planEntries({
+          entryFee: c.entryFee, rakePct: c.rakePct, count, seasonRake: s.seasonRake, credit: s.sbCredit, useCredit: s.useCreditFirst,
+        });
 
         const now = Date.now();
+        const sbNow = now + s.sbSkewMs;
         const drafts = { ...s.drafts };
         const draftIds: string[] = [];
         for (let k = 0; k < count; k++) {
@@ -348,11 +449,22 @@ export const useApp = create<AppState>()(
             id, contestId: c.id, entryFee: c.entryFee, createdAt: now + k, seed, state,
             queue: [], autodraft: !!opts.autodraft, missed: 0, autopilot: false, entryNo: mine + k + 1,
             ...(opts.autodraft ? { background: true } : {}),
+            springback: plan.entries[k].springback,
           };
           draftIds.push(id);
         }
+        const item: SpringbackItem = {
+          kind: 'entry', id: `e-${draftIds[0]}`, at: sbNow, contestId: c.id, contest: c.name, count,
+          fees: total, fromCredit: plan.fromCredit, rake: plan.earningRake, amount: plan.springback,
+          payOn: nextPayout(sbNow),
+          // Nothing accrued (all credit): nothing to wait for.
+          ...(plan.springback > 0 ? {} : { paidAt: sbNow }),
+        };
         set({
-          balance: Math.round((s.balance - total) * 100) / 100,
+          balance: money(s.balance - plan.fromCash),
+          sbCredit: money(s.sbCredit - plan.fromCredit),
+          seasonRake: Math.round((s.seasonRake + plan.earningRake) * 1e4) / 1e4,
+          sbLedger: [item, ...s.sbLedger],
           drafts,
           entries: { ...s.entries, [c.id]: mine + count },
         });
@@ -458,6 +570,12 @@ export const useApp = create<AppState>()(
         rankings: s.rankings,
         currentWeek: s.currentWeek,
         adp: s.adp,
+        seasonRake: s.seasonRake,
+        sbCredit: s.sbCredit,
+        useCreditFirst: s.useCreditFirst,
+        sbLedger: s.sbLedger,
+        sbLanded: s.sbLanded,
+        sbSkewMs: s.sbSkewMs,
       }),
       // Called after hydration finishes (success or error); defer so `useApp` is defined.
       onRehydrateStorage: () => () => {

@@ -14,7 +14,7 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 import { moveRankToTop, onTheClock, toggleExcluded } from '../../engine';
 import { exposureFor } from '../results';
 import { PLAYERS } from '../../data';
-import { liveAdp, ME, MISSES_FOR_AUTOPILOT, rankingsFor, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
+import { liveAdp, ME, MISSES_FOR_AUTOPILOT, rankingsFor, spendable, springbackPending, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
 
 const get = () => useApp.getState();
 const draft = (id: string) => get().drafts[id] as DraftEntry;
@@ -265,5 +265,71 @@ describe('ADP from completed drafts', () => {
     expect(chase).toBeGreaterThan(0.9);
     expect(chase).toBeLessThan(6);
     for (const p of PLAYERS) expect(Number.isFinite(liveAdp(table, p.id, p.adp))).toBe(true);
+  });
+});
+
+describe('Springback', () => {
+  it('accrues on entry at the Light rate and waits for Wednesday', () => {
+    const id = enter('c_two_minute_drill'); // $10 at 12% rake
+    expect(get().seasonRake).toBe(1.2);
+    expect(springbackPending(get().sbLedger)).toBe(0.048);
+    expect(draft(id).springback).toBe(0.048);
+    expect(get().sbCredit).toBe(0);
+    expect(get().settleSpringback()).toBe(0);
+    expect(get().sbCredit).toBe(0);
+  });
+
+  it('pays pending Springback as credit on Wednesday, once', () => {
+    const r = get().enterContest('c_gridiron_gauntlet', { count: 4, autodraft: true }); // $100, $12 rake
+    expect(r.ok).toBe(true);
+    expect(springbackPending(get().sbLedger)).toBe(0.48);
+    expect(get().advanceToWednesday()).toBe(0.48);
+    expect(get().sbCredit).toBe(0.48);
+    expect(get().balance).toBe(STARTING_BALANCE - 100);
+    expect(springbackPending(get().sbLedger)).toBe(0);
+    expect(get().sbLanded?.amount).toBe(0.48);
+    expect(get().sbLedger[0]).toMatchObject({ kind: 'payout', amount: 0.48, entries: 1 });
+    // Another Wednesday with nothing new pays nothing.
+    expect(get().advanceToWednesday()).toBe(0);
+    expect(get().sbCredit).toBe(0.48);
+    get().dismissLanded();
+    expect(get().sbLanded).toBeNull();
+  });
+
+  it('spends credit first, and the credit-paid part earns nothing', () => {
+    useApp.setState({ sbCredit: 4.2 });
+    expect(spendable(get())).toBe(STARTING_BALANCE + 4.2);
+    enter('c_two_minute_drill');
+    expect(get().sbCredit).toBe(0);
+    expect(get().balance).toBe(STARTING_BALANCE - 5.8);
+    // Only the $5.80 of cash paid rake that counts.
+    expect(get().seasonRake).toBe(0.696);
+    expect(get().sbLedger[0]).toMatchObject({ kind: 'entry', fromCredit: 4.2, fees: 10 });
+
+    get().resetAll();
+    useApp.setState({ hydrated: true, sbCredit: 25 });
+    enter('c_two_minute_drill');
+    expect(get().balance).toBe(STARTING_BALANCE);
+    expect(get().sbCredit).toBe(15);
+    expect(get().seasonRake).toBe(0);
+    expect(springbackPending(get().sbLedger)).toBe(0);
+  });
+
+  it('leaves credit alone when the toggle is off', () => {
+    useApp.setState({ sbCredit: 25, balance: 5 });
+    get().setUseCreditFirst(false);
+    expect(get().enterContest('c_two_minute_drill').ok).toBe(false);
+    get().setUseCreditFirst(true);
+    expect(get().enterContest('c_two_minute_drill').ok).toBe(true);
+    expect(get().balance).toBe(5);
+    expect(get().sbCredit).toBe(15);
+  });
+
+  it('moves up a gauge once enough rake is paid, with no cliff', () => {
+    // 9 Gauntlet entries: $27 of rake. $25 at 4%, $2 at 8%.
+    const r = get().enterContest('c_gridiron_gauntlet', { count: 9, autodraft: true });
+    expect(r.ok).toBe(true);
+    expect(get().seasonRake).toBe(27);
+    expect(springbackPending(get().sbLedger)).toBeCloseTo(25 * 0.04 + 2 * 0.08, 6);
   });
 });
