@@ -3,9 +3,11 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Check, ChevronRight } from '../../components/icons';
-import { Button, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
+import { SpringGlyph } from '../../components/SpringGauge';
+import { Button, formatCents, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
 import { SEASON_WEEKS } from '../../data';
-import { useApp } from '../../store/useApp';
+import { gaugeFor, springLoad } from '../../engine';
+import { springbackPending, useApp } from '../../store/useApp';
 import { ACTIVE_BRAND, BRANDS } from '../../theme/brands';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors, useTheme, type BrandKey } from '../../theme/useTheme';
@@ -26,6 +28,12 @@ export default function Account() {
   const drafts = useApp((st) => st.drafts);
   const week = useApp((st) => st.currentWeek);
   const setWeek = useApp((st) => st.setWeek);
+  const seasonRake = useApp((st) => st.seasonRake);
+  const credit = useApp((st) => st.sbCredit);
+  const pending = useApp((st) => springbackPending(st.sbLedger));
+  const advanceToWednesday = useApp((st) => st.advanceToWednesday);
+  const gauge = gaugeFor(seasonRake);
+  const [wedNote, setWedNote] = useState<string | null>(null);
   const [lab, setLab] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const stats = useMemo(() => {
@@ -55,6 +63,21 @@ export default function Account() {
           </View>
           <MockNote text="Mock funds for testing only. They have no cash value and cannot be withdrawn." />
         </View>
+
+        <Tap accessibilityRole="button" onPress={() => router.push('/springback')} style={s.spring} testID="springback-row" scaleTo={0.99}>
+          <SpringGlyph color={c.primary} load={springLoad(seasonRake)} size={34} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.springKicker}>Springback</Text>
+            <Text style={s.springTitle}>
+              {gauge.name} gauge · {gauge.ratePct}% on new rake
+            </Text>
+            <Text style={s.hint}>
+              {pending > 0 ? `${formatCents(pending)} springs back Wednesday.` : 'Rake you pay springs back every Wednesday.'}
+              {credit > 0 ? ` ${formatCents(credit)} credit ready.` : ''} Mock.
+            </Text>
+          </View>
+          <ChevronRight color={c.textMuted} size={18} />
+        </Tap>
 
         <View style={s.list}>
           <Row label="Drafts" value={`${stats.total}`} />
@@ -103,6 +126,24 @@ export default function Account() {
                 <Button small variant="secondary" label="Back" disabled={week <= 0} onPress={() => setWeek(week - 1)} testID="week-back" />
                 <Text style={s.weekValue} testID="week-value">{week}</Text>
                 <Button small variant="secondary" label="Advance" disabled={week >= SEASON_WEEKS} onPress={() => setWeek(week + 1)} testID="week-advance" />
+              </View>
+              <View style={s.weekRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rowLabel}>Springback payout (mock)</Text>
+                  <Text style={s.hint} testID="wednesday-note">
+                    {wedNote ?? (pending > 0 ? `${formatCents(pending)} pending. Skip ahead and pay it.` : 'Nothing pending yet.')}
+                  </Text>
+                </View>
+                <Button
+                  small
+                  variant="secondary"
+                  label="Advance to Wednesday"
+                  testID="advance-wednesday"
+                  onPress={() => {
+                    const paid = advanceToWednesday();
+                    setWedNote(paid > 0 ? `Paid ${formatCents(paid)} in credit.` : 'Wednesday came. Nothing to pay.');
+                  }}
+                />
               </View>
               <Text style={s.hint}>Theme preview, for the team. Only changes this device.</Text>
               {(Object.keys(BRANDS) as BrandKey[]).map((k) => {
@@ -179,6 +220,9 @@ const useStyles = makeStyles((c) => ({
   title: { ...type.display40, color: c.text },
   label: { ...type.small, color: c.textMuted },
   balance: { fontFamily: fonts.displayHeavy, fontSize: 56, lineHeight: 58, color: c.text },
+  spring: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, backgroundColor: c.surface },
+  springKicker: { ...type.label, color: c.primary },
+  springTitle: { ...type.bodyStrong, color: c.text },
   list: { borderTopWidth: 1, borderTopColor: c.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
   rowLabel: { ...type.body, color: c.text },

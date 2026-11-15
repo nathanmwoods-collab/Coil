@@ -1,10 +1,13 @@
 /**
  * Lobby promo cards. Data only: the lobby renders whatever is here, in order.
- * Everything is MOCK: credits, matches and rakeback have no cash value.
+ * Everything is MOCK: credits, matches and Springback have no cash value.
+ * Promo and referral terms are placeholders until counsel reviews them state by state (see docs/loyalty.md).
  */
 export type PromoAction =
   | { type: 'deposit'; amount?: number }
   | { type: 'contest'; contestId: string }
+  /** Opens the Springback screen. The lobby card shows the live pending amount. */
+  | { type: 'springback' }
   | { type: 'details' };
 
 export interface Promo {
@@ -46,19 +49,13 @@ export const PROMOS: Promo[] = [
     action: { type: 'contest', contestId: 'c_gridiron_gauntlet' },
   },
   {
-    id: 'windup',
-    kicker: 'Windup',
-    figure: '5%',
-    title: 'Earn Turns, get Springback',
-    body: 'Every draft winds the spring. Springback pays some of your fees back.',
-    cta: 'See how Windup works',
-    action: { type: 'details' },
-    details: [
-      'Every $1 in entry fees earns 1 Turn.',
-      'Turns wind you up through tiers. Higher tiers mean more Springback.',
-      'Springback is rakeback: up to 5% of your fees, paid weekly as mock credit.',
-      'Windup opens with the season. Your drafts until then still count.',
-    ],
+    id: 'springback',
+    kicker: 'Springback',
+    figure: '4%',
+    title: 'Rake springs back on Wednesdays',
+    body: 'From 4% on your first entry up to 26%. No points, no playthrough.',
+    cta: 'See your Springback',
+    action: { type: 'springback' },
   },
   {
     id: 'refer',
@@ -72,6 +69,7 @@ export const PROMOS: Promo[] = [
       'Share your link. When a friend finishes a first paid draft, you each get $25 mock credit.',
       'No cap on friends. One credit per friend.',
       'Referral links go live at launch. Nothing to send yet.',
+      'Not offered in every state. Final terms come after legal review.',
     ],
   },
 ];
@@ -87,6 +85,8 @@ export function promoHref(p: Promo): string {
       return p.action.amount ? `/deposit?amount=${p.action.amount}` : '/deposit';
     case 'contest':
       return `/contest/${p.action.contestId}`;
+    case 'springback':
+      return '/springback';
     case 'details':
       return `/promo/${p.id}`;
   }

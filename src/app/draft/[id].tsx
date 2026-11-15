@@ -59,6 +59,7 @@ function Room({ d }: { d: DraftEntry }) {
   const c = useColors();
   const state = d.state;
   const contest = contestById(d.contestId);
+  const springbackPaid = useApp((st) => st.sbLedger.some((x) => x.kind === 'entry' && x.paidAt != null && x.draftIds.includes(d.id)));
   const draftPlayer = useApp((st) => st.draftPlayer);
   const toggleQueue = useApp((st) => st.toggleQueue);
   const moveQueue = useApp((st) => st.moveQueue);
@@ -311,6 +312,8 @@ function Room({ d }: { d: DraftEntry }) {
               players={PLAYER_BY_ID}
               onPlay={() => router.replace(`/results/${d.id}`)}
               onBoard={() => setShowBoard(true)}
+              springback={{ amount: d.springback ?? 0, paid: springbackPaid }}
+              onSpringback={() => router.push('/springback')}
             />
           )
         ) : tab === 'players' ? (

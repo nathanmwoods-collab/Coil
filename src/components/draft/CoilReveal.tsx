@@ -8,7 +8,8 @@ import { ME } from '../../store/useApp';
 import { motion, NATIVE_DRIVER, useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
-import { Button, shortName } from '../ui';
+import { SpringGlyph } from '../SpringGauge';
+import { Button, formatCents, shortName, Tap } from '../ui';
 
 const COLS = 6;
 const ROW_H = 62;
@@ -25,11 +26,16 @@ export const CoilReveal = memo(function CoilReveal({
   players,
   onPlay,
   onBoard,
+  springback,
+  onSpringback,
 }: {
   state: DraftState;
   players: Map<string, Player>;
   onPlay: () => void;
   onBoard: () => void;
+  /** MOCK Springback this entry accrued, and whether its Wednesday has already paid. */
+  springback?: { amount: number; paid: boolean };
+  onSpringback?: () => void;
 }) {
   const s = useStyles();
   const c = useColors();
@@ -160,6 +166,23 @@ export const CoilReveal = memo(function CoilReveal({
         <Text style={s.line}>{id.line}</Text>
       </Animated.View>
 
+      {springback && springback.amount > 0 ? (
+        <Tap
+          accessibilityRole="button"
+          accessibilityLabel={`${formatCents(springback.amount)} Springback ${springback.paid ? 'paid as credit' : 'pending, lands Wednesday'}. Mock. Open Springback.`}
+          onPress={onSpringback}
+          scaleTo={0.99}
+          style={s.spring}
+          testID="draft-springback"
+        >
+          <SpringGlyph color={c.primary} size={18} />
+          <Text style={s.springText}>
+            +{formatCents(springback.amount)} Springback {springback.paid ? 'paid.' : 'pending.'}
+            <Text style={s.springSub}>{springback.paid ? ' Landed as entry credit (mock).' : ' Lands Wednesday (mock).'}</Text>
+          </Text>
+        </Tap>
+      ) : null}
+
       <View style={{ gap: 10 }}>
         <Button label="Play the season" onPress={onPlay} testID="view-results" />
         <Button variant="ghost" label="See the full board" onPress={onBoard} testID="see-board" />
@@ -174,6 +197,9 @@ const useStyles = makeStyles((c) => ({
   sub: { ...type.body, color: c.textMuted, marginTop: 2 },
   node: { position: 'absolute', width: 60, textAlign: 'center', fontFamily: fonts.strong, fontSize: 10, lineHeight: 13, color: c.textMuted },
   card: { borderLeftWidth: 0, borderRadius: 18, backgroundColor: c.surface, padding: 18, gap: 4 },
+  spring: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginVertical: -8 },
+  springText: { ...type.smallStrong, color: c.text, flex: 1 },
+  springSub: { ...type.small, color: c.textMuted },
   kicker: { ...type.label, color: c.primary },
   build: { fontFamily: fonts.displayHeavy, fontSize: 44, lineHeight: 46, color: c.text },
   counts: { fontFamily: fonts.mono, fontSize: 12, color: c.textMuted },

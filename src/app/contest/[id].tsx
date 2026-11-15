@@ -1,13 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Check, Close } from '../../components/icons';
-import { Button, clockLabel, Empty, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
+import { SpringGlyph } from '../../components/SpringGauge';
+import { Button, clockLabel, Empty, formatCents, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
 import { isSitAndGo } from '../../data';
-import { clampEntries, DEFAULT_LINEUP, DRAFT_TYPES, draftTypeOf, entryLimit, entryTotal } from '../../engine';
+import { clampEntries, DEFAULT_LINEUP, DRAFT_TYPES, draftTypeOf, entryLimit, gaugeFor, planEntries, rakeFor } from '../../engine';
 import { feel } from '../../lib/feel';
-import { contestById, MISSES_FOR_AUTOPILOT, useApp } from '../../store/useApp';
+import { contestById, MISSES_FOR_AUTOPILOT, spendable, useApp } from '../../store/useApp';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 
@@ -17,6 +18,10 @@ export default function ContestDetail() {
   const c = useColors();
   const contest = contestById(String(id));
   const balance = useApp((st) => st.balance);
+  const credit = useApp((st) => st.sbCredit);
+  const useCreditFirst = useApp((st) => st.useCreditFirst);
+  const setUseCreditFirst = useApp((st) => st.setUseCreditFirst);
+  const seasonRake = useApp((st) => st.seasonRake);
   const mine = useApp((st) => (contest ? st.entries[contest.id] ?? 0 : 0));
   const enterContest = useApp((st) => st.enterContest);
   const [error, setError] = useState<string | null>(null);
@@ -34,13 +39,22 @@ export default function ContestDetail() {
   }
 
   const filled = Math.min(contest.maxEntries, contest.filled + mine);
-  const limit = entryLimit(contest, mine, balance);
+  const funds = spendable({ balance, sbCredit: credit, useCreditFirst });
+  const limit = entryLimit(contest, mine, funds);
   const atMax = limit.perUserLeft < 1;
   const full = limit.seatsLeft < 1;
   const n = clampEntries(count, limit);
-  const total = entryTotal(contest.entryFee, n);
-  const canAfford = balance >= total;
-  const short = Math.round((total - balance) * 100) / 100;
+  // Same pricing the store uses: credit first (if on), and only the cash part earns Springback.
+  const plan = planEntries({ entryFee: contest.entryFee, rakePct: contest.rakePct, count: n, seasonRake, credit, useCredit: useCreditFirst });
+  const total = plan.total;
+  const canAfford = funds >= total;
+  const short = Math.round((total - funds) * 100) / 100;
+  const rakeEach = rakeFor(contest.entryFee, contest.rakePct);
+  const entryWord = n === 1 ? 'This entry' : `These ${n} entries`;
+  const springLine =
+    plan.springback > 0
+      ? `${entryWord} ${n === 1 ? 'springs' : 'spring'} back ${formatCents(plan.springback)} on Wednesday`
+      : `${entryWord} ${n === 1 ? 'is' : 'are'} paid with Springback credit, so ${n === 1 ? 'it earns' : 'they earn'} no Springback`;
   const lineup = DEFAULT_LINEUP;
   const sitGo = isSitAndGo(contest);
   const multi = contest.maxPerUser > 1;
@@ -104,6 +118,7 @@ export default function ContestDetail() {
         <View style={s.facts}>
           <Fact label="Seats taken" value={`${filled.toLocaleString()} of ${contest.maxEntries.toLocaleString()}`} />
           <Fact label="Your entries" value={`${mine} of ${contest.maxPerUser}`} highlight={mine > 0} />
+          <Fact label="Coil's rake" value={`${contest.rakePct}% · ${formatCents(rakeEach)} of each ${formatMoney(contest.entryFee)}`} testID="contest-rake" />
         </View>
 
         {atMax || full ? null : (
@@ -183,6 +198,41 @@ export default function ContestDetail() {
       </ScrollView>
       <View style={s.footer}>
         {error ? <Text style={s.error}>{error}</Text> : null}
+        {atMax || full ? null : (
+          <Tap
+            accessibilityRole="button"
+            accessibilityLabel={`${springLine}. Mock. ${gaugeFor(seasonRake).name} gauge. Open Springback.`}
+            onPress={() => router.push('/springback')}
+            scaleTo={0.99}
+            style={s.spring}
+            testID="contest-springback"
+          >
+            <SpringGlyph color={c.primary} size={18} />
+            <Text style={s.springText}>
+              {springLine}
+              <Text style={s.springMock}> (mock)</Text>
+            </Text>
+          </Tap>
+        )}
+        {credit > 0 && !atMax && !full ? (
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: useCreditFirst }}
+            accessibilityLabel={`Use Springback credit, ${formatCents(credit)}`}
+            onPress={() => setUseCreditFirst(!useCreditFirst)}
+            style={s.creditRow}
+            testID="contest-credit-toggle"
+          >
+            <Text style={[s.label, { flex: 1 }]} testID="contest-credit">
+              {useCreditFirst && plan.fromCredit > 0
+                ? `${formatCents(plan.fromCredit)} Springback credit goes first, ${formatCents(plan.fromCash)} from cash`
+                : `${formatCents(credit)} Springback credit, not used`}
+            </Text>
+            <View style={[s.track, { backgroundColor: useCreditFirst ? c.accent : c.border }]}>
+              <View style={[s.knob, { alignSelf: useCreditFirst ? 'flex-end' : 'flex-start', backgroundColor: useCreditFirst ? c.bg : c.text }]} />
+            </View>
+          </Pressable>
+        ) : null}
         <View style={s.balanceRow}>
           <Text style={s.label}>
             {n > 1 ? `${n} × ${formatMoney(contest.entryFee)} · ` : ''}Mock balance
@@ -226,13 +276,15 @@ function Mode({ on, label, hint, onPress, testID }: { on: boolean; label: string
   );
 }
 
-function Fact({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function Fact({ label, value, highlight, testID }: { label: string; value: string; highlight?: boolean; testID?: string }) {
   const s = useStyles();
   const c = useColors();
   return (
     <View style={s.fact}>
       <Text style={s.factLabel}>{label}</Text>
-      <Text style={[s.factValue, highlight && { color: c.primary }]}>{value}</Text>
+      <Text style={[s.factValue, highlight && { color: c.primary }]} testID={testID}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -268,6 +320,12 @@ const useStyles = makeStyles((c) => ({
   short: { ...type.smallStrong, color: c.danger, marginBottom: 8 },
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg },
   error: { ...type.smallStrong, color: c.danger, marginBottom: 8 },
+  spring: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32, marginBottom: 8 },
+  springText: { ...type.smallStrong, color: c.text, flex: 1 },
+  springMock: { ...type.small, color: c.textMuted },
+  creditRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 36, marginBottom: 6 },
+  track: { width: 40, height: 24, borderRadius: 12, padding: 3, justifyContent: 'center' },
+  knob: { width: 18, height: 18, borderRadius: 9 },
   balanceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   balance: { fontFamily: fonts.mono, fontSize: 13 },
 }));

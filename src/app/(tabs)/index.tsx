@@ -4,9 +4,10 @@ import { FlatList, Image, Text, View } from 'react-native';
 
 import { ContestCard } from '../../components/ContestCard';
 import { PromoRail } from '../../components/PromoRail';
+import { SpringGlyph } from '../../components/SpringGauge';
 import { Button, Chip, clockLabel, clockSpeed, formatMoney, Screen, Tap } from '../../components/ui';
 import { CONTESTS, contestsFor, DEFAULT_SPORT, SPORTS, type SportInfo } from '../../data';
-import type { Contest } from '../../engine';
+import { gaugeFor, springLoad, type Contest } from '../../engine';
 import { useApp } from '../../store/useApp';
 import { BRANDS } from '../../theme/brands';
 import { fonts, type } from '../../theme/type';
@@ -29,6 +30,8 @@ export default function Lobby() {
   const balance = useApp((st) => st.balance);
   const entries = useApp((st) => st.entries);
   const matchUsed = useApp((st) => st.matchUsed);
+  const seasonRake = useApp((st) => st.seasonRake);
+  const gauge = gaugeFor(seasonRake);
   const [filter, setFilter] = useState<Filter>('All');
   // Only live sports can be selected; a "soon" chip explains itself instead.
   const [sport] = useState(DEFAULT_SPORT);
@@ -66,6 +69,24 @@ export default function Lobby() {
           <Button small testID="lobby-deposit" label="Deposit" onPress={() => router.push('/deposit')} />
         </View>
       </View>
+      <View style={s.subHeader}>
+        <Text style={s.tagline} numberOfLines={1}>
+          {brand.tagline}
+        </Text>
+        <Tap
+          testID="lobby-gauge"
+          accessibilityRole="button"
+          accessibilityLabel={`Springback gauge: ${gauge.name}, ${gauge.ratePct}% of new rake springs back. Open Springback.`}
+          onPress={() => router.push('/springback')}
+          hitSlop={8}
+          style={s.gaugeChip}
+        >
+          <SpringGlyph color={c.primary} load={springLoad(seasonRake)} size={16} />
+          <Text style={s.gaugeText}>
+            {gauge.name} · {gauge.ratePct}%
+          </Text>
+        </Tap>
+      </View>
       <FlatList
         data={rest}
         keyExtractor={(x) => x.id}
@@ -74,7 +95,6 @@ export default function Lobby() {
         ItemSeparatorComponent={Sep}
         ListHeaderComponent={
           <View style={{ gap: 18, marginBottom: 12 }}>
-            <Text style={s.tagline}>{brand.tagline}</Text>
             <View style={{ gap: 8 }}>
               <View style={s.sports} accessibilityRole="tablist">
                 {SPORTS.map((sp) =>
@@ -130,7 +150,10 @@ const useStyles = makeStyles((c) => ({
   logo: { width: 38, height: 38, marginBottom: 2 },
   brand: { fontFamily: fonts.displayHeavy, fontSize: 36, lineHeight: 38, color: c.text, letterSpacing: 0.3 },
   dot: { width: 7, height: 7, borderRadius: 4, marginBottom: 9, marginLeft: -2 },
-  tagline: { ...type.small, color: c.textMuted, marginTop: -6 },
+  subHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingBottom: 6 },
+  tagline: { ...type.small, color: c.textMuted, flex: 1 },
+  gaugeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, paddingHorizontal: 10, borderRadius: 14, borderWidth: 1, borderColor: c.primary + '66' },
+  gaugeText: { fontFamily: fonts.strong, fontSize: 12, color: c.text },
   balance: { alignItems: 'flex-end' },
   balanceLabel: { ...type.micro, color: c.warning },
   balanceValue: { fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: c.text },
