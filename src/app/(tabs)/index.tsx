@@ -127,7 +127,7 @@ const Sep = () => <View style={{ height: 10 }} />;
 const useStyles = makeStyles((c) => ({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
   brandRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  logo: { width: 30, height: 30, marginBottom: 3 },
+  logo: { width: 38, height: 38, marginBottom: 2 },
   brand: { fontFamily: fonts.displayHeavy, fontSize: 36, lineHeight: 38, color: c.text, letterSpacing: 0.3 },
   dot: { width: 7, height: 7, borderRadius: 4, marginBottom: 9, marginLeft: -2 },
   tagline: { ...type.small, color: c.textMuted, marginTop: -6 },
