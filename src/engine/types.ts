@@ -4,6 +4,13 @@ export const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
 /** Sports the app knows about. Only NFL has data today. */
 export type Sport = 'nfl' | 'nba' | 'mlb';
 
+/**
+ * A slate is the set of games a contest is played over. Rankings belong to a
+ * slate: an NFL season list and an NFL Playoffs list are different lists, and
+ * so are NFL and NBA. Fast and slow clocks on the same slate share one list.
+ */
+export type Slate = 'nfl' | 'nfl_playoffs' | 'nba' | 'mlb';
+
 export interface Player {
   id: string;
   sport: Sport;
@@ -76,5 +83,7 @@ export interface Contest {
   pickClockSec: number;
   filled: number;
   tag?: 'flagship' | 'fast' | 'beginner' | 'satellite';
+  /** Defaults to the sport's regular season (`sport`). */
+  slate?: Slate;
   startsAt: string; // ISO
 }

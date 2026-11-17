@@ -6,7 +6,7 @@ import { Check, Close } from '../../components/icons';
 import { SpringGlyph } from '../../components/SpringGauge';
 import { Button, clockLabel, Empty, formatCents, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
 import { isSitAndGo } from '../../data';
-import { clampEntries, DEFAULT_LINEUP, DRAFT_TYPES, draftTypeOf, entryLimit, gaugeFor, planEntries, rakeFor } from '../../engine';
+import { clampEntries, DEFAULT_LINEUP, entryLimit, gaugeFor, planEntries, rakeFor, slateInfo, slateOf } from '../../engine';
 import { feel } from '../../lib/feel';
 import { contestById, MISSES_FOR_AUTOPILOT, spendable, useApp } from '../../store/useApp';
 import { fonts, type } from '../../theme/type';
@@ -58,7 +58,7 @@ export default function ContestDetail() {
   const lineup = DEFAULT_LINEUP;
   const sitGo = isSitAndGo(contest);
   const multi = contest.maxPerUser > 1;
-  const listName = DRAFT_TYPES.find((t) => t.key === draftTypeOf(contest))?.label.toLowerCase() ?? '';
+  const listName = slateInfo(slateOf(contest)).label;
 
   const onEnter = () => {
     if (entering.current) return;
@@ -100,7 +100,7 @@ export default function ContestDetail() {
         <View style={{ gap: 6 }}>
           <Text style={s.title}>{contest.name}</Text>
           <Text style={s.meta}>
-            {clockLabel(contest.pickClockSec)} picks · {contest.teams}-team {sitGo ? 'sit & go' : 'pods'} · {contest.rounds} rounds
+            {clockLabel(contest.pickClockSec)} picks · {contest.rounds} rounds
           </Text>
         </View>
 

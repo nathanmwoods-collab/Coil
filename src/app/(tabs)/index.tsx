@@ -70,9 +70,6 @@ export default function Lobby() {
         </View>
       </View>
       <View style={s.subHeader}>
-        <Text style={s.tagline} numberOfLines={1}>
-          {brand.tagline}
-        </Text>
         <Tap
           testID="lobby-gauge"
           accessibilityRole="button"
@@ -150,8 +147,7 @@ const useStyles = makeStyles((c) => ({
   logo: { width: 38, height: 38, marginBottom: 2 },
   brand: { fontFamily: fonts.displayHeavy, fontSize: 36, lineHeight: 38, color: c.text, letterSpacing: 0.3 },
   dot: { width: 7, height: 7, borderRadius: 4, marginBottom: 9, marginLeft: -2 },
-  subHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingBottom: 6 },
-  tagline: { ...type.small, color: c.textMuted, flex: 1 },
+  subHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 6 },
   gaugeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, paddingHorizontal: 10, borderRadius: 14, borderWidth: 1, borderColor: c.primary + '66' },
   gaugeText: { fontFamily: fonts.strong, fontSize: 12, color: c.text },
   balance: { alignItems: 'flex-end' },

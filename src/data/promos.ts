@@ -44,7 +44,7 @@ export const PROMOS: Promo[] = [
     kicker: 'Main event',
     figure: '$3M',
     title: 'The Gridiron Gauntlet',
-    body: '$25 to draft. 12-team pods, top 2 move on.',
+    body: "$25 a seat. Win your pod or run second and you're still alive.",
     cta: 'See the contest',
     action: { type: 'contest', contestId: 'c_gridiron_gauntlet' },
   },

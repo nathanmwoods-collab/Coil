@@ -19,7 +19,7 @@ import { botLine } from '../../lib/banter';
 import { announce, feel } from '../../lib/feel';
 import { searchPlayers } from '../../lib/search';
 import { exposureFor, PLAYER_BY_ID } from '../../store/results';
-import { contestById, draftTypeFor, liveAdp, ME, useApp, type DraftEntry } from '../../store/useApp';
+import { contestById, draftTypeFor, liveAdp, ME, slateFor, useApp, type DraftEntry } from '../../store/useApp';
 import { useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
@@ -415,7 +415,7 @@ function Room({ d }: { d: DraftEntry }) {
             accessibilityRole="button"
             onPress={() => {
               setMenu(false);
-              router.push(`/rankings?type=${draftTypeFor(d)}`);
+              router.push(`/rankings?slate=${slateFor(d)}`);
             }}
             style={s.sheetLink}
             testID="sheet-rankings"

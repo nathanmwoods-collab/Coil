@@ -27,7 +27,6 @@ export const ContestCard = memo(function ContestCard({
   const meta = [
     ...(featured ? ['Main event'] : []),
     formatMoney(contest.entryFee),
-    sitGo ? 'Sit & go' : `${contest.teams}-team pods`,
     `${clockLabel(contest.pickClockSec)} picks`,
   ].join(' · ');
   return (

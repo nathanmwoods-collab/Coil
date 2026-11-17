@@ -6,20 +6,21 @@ import { ArrowDown, ArrowUp, ChevronLeft } from '../components/icons';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { Button, Empty, PosPill, Screen, Segmented, Tap } from '../components/ui';
 import {
-  DRAFT_TYPES,
   isCustomized,
+  isSlate,
+  SLATES,
+  slateInfo,
   moveRank,
   moveRankToTop,
   tierNumbers,
   toggleExcluded,
   toggleTierBreak,
-  type DraftType,
   type Player,
+  type Slate,
 } from '../engine';
-import { PLAYERS } from '../data';
+import { playerMapFor, playersFor } from '../data';
 import { feel } from '../lib/feel';
 import { searchPlayers } from '../lib/search';
-import { PLAYER_BY_ID } from '../store/results';
 import { rankingsFor, useApp } from '../store/useApp';
 import { fonts, type } from '../theme/type';
 import { makeStyles, useColors } from '../theme/useTheme';
@@ -35,9 +36,11 @@ interface RowData {
 export default function RankingsScreen() {
   const s = useStyles();
   const c = useColors();
-  const params = useLocalSearchParams<{ type?: string }>();
-  const initial = DRAFT_TYPES.some((t) => t.key === params.type) ? (params.type as DraftType) : 'fast12';
-  const [kind, setKind] = useState<DraftType>(initial);
+  const params = useLocalSearchParams<{ slate?: string }>();
+  const [kind, setKind] = useState<Slate>(isSlate(params.slate) ? params.slate : 'nfl');
+  const sport = slateInfo(kind).sport;
+  const pool = useMemo(() => playersFor(sport), [sport]);
+  const byId = useMemo(() => playerMapFor(sport), [sport]);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -46,22 +49,22 @@ export default function RankingsScreen() {
   const resetRankings = useApp((st) => st.resetRankings);
 
   const r = useMemo(() => rankingsFor(all, kind), [all, kind]);
-  const custom = useMemo(() => isCustomized(all[kind], PLAYERS), [all, kind]);
+  const custom = useMemo(() => isCustomized(all[kind], pool), [all, kind, pool]);
   const rows = useMemo(() => {
     const tiers = tierNumbers(r);
     const breaks = new Set(r.tiers);
     const no = new Set(r.excluded);
     const list: RowData[] = [];
     r.order.forEach((id, i) => {
-      const player = PLAYER_BY_ID.get(id);
+      const player = byId.get(id);
       if (player) list.push({ player, rank: i + 1, tier: tiers[i], tierStart: i > 0 && breaks.has(id), excluded: no.has(id) });
     });
     if (!q.trim()) return list;
     const hits = new Map(list.map((x) => [x.player, x]));
     return searchPlayers(q, list.map((x) => x.player)).map((p) => hits.get(p)!);
-  }, [r, q]);
+  }, [r, q, byId]);
 
-  const blurb = DRAFT_TYPES.find((t) => t.key === kind)?.blurb ?? '';
+  const blurb = `Every ${slateInfo(kind).label} contest drafts from this list, fast or slow`;
   const act = useCallback(
     (fn: Parameters<typeof editRankings>[1], nudge = true) => {
       if (nudge) feel.nudge();
@@ -90,14 +93,14 @@ export default function RankingsScreen() {
         ) : null}
       </View>
       <View style={{ paddingHorizontal: 16 }}>
-        <Segmented<DraftType>
+        <Segmented<Slate>
           value={kind}
           onChange={(k) => {
             setKind(k);
             setOpen(null);
             setConfirmReset(false);
           }}
-          options={DRAFT_TYPES.map((t) => ({ key: t.key, label: t.label }))}
+          options={SLATES.map((t) => ({ key: t.key, label: t.label }))}
         />
       </View>
       {confirmReset ? (
@@ -144,7 +147,13 @@ export default function RankingsScreen() {
         initialNumToRender={14}
         windowSize={9}
         contentContainerStyle={{ paddingBottom: 32 }}
-        ListEmptyComponent={<Empty art={false} title="Nobody by that name." body="Try a team, a position or a nickname." />}
+        ListEmptyComponent={
+          pool.length ? (
+            <Empty art={false} title="Nobody by that name." body="Try a team, a position or a nickname." />
+          ) : (
+            <Empty title={`No ${slateInfo(kind).label} players yet.`} body="This list opens when the slate does." />
+          )
+        }
         renderItem={({ item }) => (
           <RankRow
             item={item}

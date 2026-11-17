@@ -21,8 +21,11 @@ import {
   nextPayout,
   onTheClock,
   planEntries,
+  migrateLegacyRankings,
   reconcileRankings,
   seedRankings,
+  slateInfo,
+  slateOf,
   settleAccruals,
   totalPicks,
   updateAdp,
@@ -30,6 +33,7 @@ import {
   type Contest,
   type DraftType,
   type Rankings,
+  type Slate,
   type DraftState,
   type Entrant,
 } from '../engine';
@@ -156,8 +160,8 @@ interface AppState {
   /** The one-time first-deposit match has been paid out. */
   matchUsed: boolean;
 
-  /** Personal rankings per draft type. Missing means "same as ADP". */
-  rankings: Partial<Record<DraftType, Rankings>>;
+  /** Personal rankings per slate (NFL, NFL Playoffs, NBA...). Missing means "same as ADP". */
+  rankings: Partial<Record<Slate, Rankings>>;
 
   /** MOCK season clock: completed weeks, 0 to 17. Moved from Lab. */
   currentWeek: number;
@@ -188,9 +192,9 @@ interface AppState {
   setWeek: (week: number) => void;
   /** Set team names in bulk: draft id -> name. An empty name goes back to "Entry N". */
   renameTeams: (names: Record<string, string>) => void;
-  /** Apply an edit (move, exclude, tier break) to one draft type's rankings. */
-  editRankings: (type: DraftType, edit: (r: Rankings) => Rankings) => void;
-  resetRankings: (type: DraftType) => void;
+  /** Apply an edit (move, exclude, tier break) to one slate's rankings. */
+  editRankings: (slate: Slate, edit: (r: Rankings) => Rankings) => void;
+  resetRankings: (slate: Slate) => void;
   /** Mock deposit: adds the amount plus any first-deposit match. Returns the bonus. */
   deposit: (amount: number) => number;
   enterContest: (
@@ -240,12 +244,22 @@ export function draftTypeFor(d: Pick<DraftEntry, 'contestId' | 'state'>): DraftT
   return draftTypeOf(c ?? { teams: cfg.teams, maxEntries: Infinity, pickClockSec: cfg.pickClockSec });
 }
 
-/** Rankings for a draft type, seeded from ADP until the user edits them. */
-export function rankingsFor(all: Partial<Record<DraftType, Rankings>>, type: DraftType): Rankings {
-  const r = all[type];
-  return r ? reconcileRankings(r, PLAYERS) : SEED_RANKINGS;
+/** Which slate's rankings a draft autopicks from. */
+export function slateFor(d: Pick<DraftEntry, 'contestId'>): Slate {
+  const c = contestById(d.contestId);
+  return c ? slateOf(c) : DEFAULT_SPORT;
 }
-const SEED_RANKINGS = seedRankings(PLAYERS);
+
+/** Rankings for a slate, seeded from that slate's ADP until the user edits them. */
+export function rankingsFor(all: Partial<Record<Slate, Rankings>>, slate: Slate): Rankings {
+  const pool = playersFor(slateInfo(slate).sport);
+  const r = all[slate];
+  if (r) return reconcileRankings(r, pool);
+  let seed = SEED_RANKINGS.get(slate);
+  if (!seed) SEED_RANKINGS.set(slate, (seed = seedRankings(pool)));
+  return seed;
+}
+const SEED_RANKINGS = new Map<Slate, Rankings>();
 
 function updateDraft(drafts: Record<string, DraftEntry>, id: string, patch: Partial<DraftEntry>) {
   const d = drafts[id];
@@ -257,7 +271,7 @@ function stepDraft(
   d: DraftEntry,
   now: number,
   botDelay: number,
-  rankings: Partial<Record<DraftType, Rankings>> = {},
+  rankings: Partial<Record<Slate, Rankings>> = {},
 ): DraftEntry | null {
   const st = d.state;
   // The pool comes from the contest's sport, so a new sport needs no changes here.
@@ -283,8 +297,8 @@ function stepDraft(
   const expired = st.clockEndsAt !== null && now >= st.clockEndsAt;
   const autoReady = auto && now - lastAt >= Math.min(botDelay, 700);
   if (!expired && !autoReady) return null;
-  // Autopick order: this draft's queue, then the user's rankings for this draft type, then ADP.
-  const pl = autoPickPlayer(st, clock.id, pool, autopickOrder(d.queue, rankings[draftTypeFor(d)]));
+  // Autopick order: this draft's queue, then the user's rankings for this slate, then ADP.
+  const pl = autoPickPlayer(st, clock.id, pool, autopickOrder(d.queue, rankings[slateFor(d)]));
   if (!pl) return null;
   const state = makePick(st, clock.id, pl.id, { auto: true, now });
   const missed = !auto && expired ? d.missed + 1 : d.missed;
@@ -307,7 +321,7 @@ const initial = {
   matchUsed: false,
   currentWeek: DEFAULT_WEEK,
   adp: {} as Partial<Record<DraftType, AdpTable>>,
-  rankings: {} as Partial<Record<DraftType, Rankings>>,
+  rankings: {} as Partial<Record<Slate, Rankings>>,
   seasonRake: 0,
   sbCredit: 0,
   useCreditFirst: true,
@@ -382,16 +396,16 @@ export const useApp = create<AppState>()(
           return { drafts };
         }),
 
-      editRankings: (type, edit) =>
+      editRankings: (slate, edit) =>
         set((s) => {
-          const cur = rankingsFor(s.rankings, type);
+          const cur = rankingsFor(s.rankings, slate);
           const next = edit(cur);
-          return next === cur ? s : { rankings: { ...s.rankings, [type]: next } };
+          return next === cur ? s : { rankings: { ...s.rankings, [slate]: next } };
         }),
 
-      resetRankings: (type) =>
+      resetRankings: (slate) =>
         set((s) => {
-          const { [type]: _drop, ...rest } = s.rankings;
+          const { [slate]: _drop, ...rest } = s.rankings;
           return { rankings: rest };
         }),
 
@@ -560,6 +574,13 @@ export const useApp = create<AppState>()(
     {
       name: 'bestball-app-v1',
       storage: createJSONStorage(() => AsyncStorage),
+      // v1: rankings moved from per-draft-type to per-slate.
+      version: 1,
+      migrate: (persisted, from) => {
+        const p = (persisted ?? {}) as Record<string, unknown>;
+        if (from < 1) p.rankings = migrateLegacyRankings(p.rankings as Record<string, Rankings>);
+        return p as unknown as AppState;
+      },
       partialize: (s) => ({
         balance: s.balance,
         drafts: s.drafts,

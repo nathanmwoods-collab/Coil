@@ -1,18 +1,37 @@
 /**
- * Personal rankings per draft type. They drive autopick after the queue:
- * queue -> rankings (minus "do not draft") -> ADP.
+ * Personal rankings, one list per slate (NFL, NFL Playoffs, NBA, ...). They
+ * drive autopick after the queue: queue -> rankings (minus "do not draft") -> ADP.
+ *
+ * Draft types (fast, slow, sit & go) still exist, but only for ADP: room size
+ * and clock change how people draft. They never split a user's rankings.
  */
-import type { Contest, Player } from './types';
+import type { Contest, Player, Slate, Sport } from './types';
 
-export type DraftType = 'fast12' | 'slow12' | 'sng';
 
-export const DRAFT_TYPES: { key: DraftType; label: string; blurb: string }[] = [
-  { key: 'fast12', label: 'Fast', blurb: '12-team pods, 30-second picks' },
-  { key: 'slow12', label: 'Slow', blurb: '12-team pods, 8-hour picks' },
-  { key: 'sng', label: 'Sit & go', blurb: 'Small pods, 10 teams or fewer' },
+export const SLATES: { key: Slate; label: string; sport: Sport }[] = [
+  { key: 'nfl', label: 'NFL', sport: 'nfl' },
+  { key: 'nfl_playoffs', label: 'NFL Playoffs', sport: 'nfl' },
+  { key: 'nba', label: 'NBA', sport: 'nba' },
+  { key: 'mlb', label: 'MLB', sport: 'mlb' },
 ];
 
-/** Which rankings list a contest uses. Small single-pod rooms get their own list. */
+export function slateInfo(slate: Slate) {
+  return SLATES.find((s) => s.key === slate) ?? SLATES[0];
+}
+
+/** Which rankings list a contest drafts from. */
+export function slateOf(c: Pick<Contest, 'sport'> & { slate?: Slate }): Slate {
+  return c.slate ?? c.sport;
+}
+
+export function isSlate(x: unknown): x is Slate {
+  return SLATES.some((s) => s.key === x);
+}
+
+/** ADP bucket. */
+export type DraftType = 'fast12' | 'slow12' | 'sng';
+
+/** Which ADP table a contest uses. Small single-pod rooms get their own. */
 export function draftTypeOf(c: Pick<Contest, 'teams' | 'maxEntries' | 'pickClockSec'>): DraftType {
   if (c.maxEntries === c.teams && c.teams < 12) return 'sng';
   return c.pickClockSec <= 120 ? 'fast12' : 'slow12';
@@ -104,4 +123,22 @@ export function isCustomized(r: Rankings | undefined, players: Player[]): boolea
   if (r.excluded.length || r.tiers.length) return true;
   const seed = seedRankings(players).order;
   return r.order.length !== seed.length || r.order.some((id, i) => id !== seed[i]);
+}
+
+const LEGACY_KEYS = ['slow12', 'fast12', 'sng'] as const;
+
+/**
+ * Rankings used to be keyed by draft type. Fold those into the NFL slate:
+ * an existing NFL list wins; otherwise the first legacy list the user had,
+ * slow first (the one most people set up by hand). Unknown keys are dropped.
+ */
+export function migrateLegacyRankings(raw: Record<string, Rankings | undefined> | undefined): Partial<Record<Slate, Rankings>> {
+  const out: Partial<Record<Slate, Rankings>> = {};
+  if (!raw) return out;
+  for (const s of SLATES) if (raw[s.key]) out[s.key] = raw[s.key];
+  if (!out.nfl) {
+    const legacy = LEGACY_KEYS.map((k) => raw[k]).find(Boolean);
+    if (legacy) out.nfl = legacy;
+  }
+  return out;
 }

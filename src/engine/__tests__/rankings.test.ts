@@ -7,6 +7,8 @@ import {
   autopickOrder,
   draftTypeOf,
   isCustomized,
+  migrateLegacyRankings,
+  slateOf,
   moveRank,
   moveRankToTop,
   rankedIds,
@@ -84,5 +86,24 @@ describe('rankings', () => {
     expect(autoPickPlayer(st, 'e0', PLAYERS, autopickOrder([], noAllen))?.id).toBe('p_ja_chase');
     expect(autoPickPlayer(st, 'e0', PLAYERS, autopickOrder([], undefined))?.id).toBe('p_ja_chase');
     expect(autopickOrder(['p_pu_nacua'], mine).filter((id) => id === 'p_pu_nacua')).toHaveLength(1);
+  });
+
+  it('keys rankings by slate, not by clock', () => {
+    const by = (id: string) => slateOf(CONTESTS.find((c) => c.id === id)!);
+    expect(by('c_two_minute_drill')).toBe('nfl');
+    expect(by('c_gridiron_gauntlet')).toBe('nfl');
+    expect(by('c_sng_six_pack')).toBe('nfl');
+    expect(slateOf({ sport: 'nfl', slate: 'nfl_playoffs' })).toBe('nfl_playoffs');
+    expect(slateOf({ sport: 'nba' })).toBe('nba');
+  });
+
+  it('migrates per-draft-type lists into the NFL slate', () => {
+    const a = moveRankToTop(seed(), 'p_tr_kelce');
+    const b = moveRankToTop(seed(), 'p_jo_allen');
+    expect(migrateLegacyRankings({ fast12: a, slow12: b }).nfl).toBe(b);
+    expect(migrateLegacyRankings({ fast12: a }).nfl).toBe(a);
+    expect(migrateLegacyRankings({ nfl: a, slow12: b }).nfl).toBe(a);
+    expect(migrateLegacyRankings({ sng: a })).toEqual({ nfl: a });
+    expect(migrateLegacyRankings(undefined)).toEqual({});
   });
 });

@@ -14,7 +14,7 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 import { moveRankToTop, onTheClock, toggleExcluded } from '../../engine';
 import { exposureFor } from '../results';
 import { PLAYERS } from '../../data';
-import { liveAdp, ME, MISSES_FOR_AUTOPILOT, rankingsFor, spendable, springbackPending, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
+import { liveAdp, ME, MISSES_FOR_AUTOPILOT, rankingsFor, slateFor, spendable, springbackPending, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
 
 const get = () => useApp.getState();
 const draft = (id: string) => get().drafts[id] as DraftEntry;
@@ -157,7 +157,7 @@ describe('mock deposit', () => {
 
 describe('rankings drive autopick', () => {
   it('autopilot takes the top of my rankings, skipping do-not-draft', () => {
-    get().editRankings('fast12', (r) => moveRankToTop(toggleExcluded(r, 'p_ja_chase'), 'p_tr_kelce'));
+    get().editRankings('nfl', (r) => moveRankToTop(toggleExcluded(r, 'p_ja_chase'), 'p_tr_kelce'));
     const id = enter('c_two_minute_drill');
     get().setAutodraft(id, true);
     let t = Date.now();
@@ -170,16 +170,32 @@ describe('rankings drive autopick', () => {
     expect(mine.some((p) => p.playerId === 'p_ja_chase')).toBe(false);
   });
 
-  it('uses a separate list per draft type and resets to ADP', () => {
-    get().editRankings('slow12', (r) => moveRankToTop(r, 'p_jo_allen'));
-    expect(rankingsFor(get().rankings, 'slow12').order[0]).toBe('p_jo_allen');
-    expect(rankingsFor(get().rankings, 'fast12').order[0]).toBe('p_ja_chase');
-    get().resetRankings('slow12');
-    expect(get().rankings.slow12).toBeUndefined();
+  it('uses one list per slate and resets to ADP', () => {
+    get().editRankings('nfl_playoffs', (r) => moveRankToTop(r, 'p_jo_allen'));
+    expect(rankingsFor(get().rankings, 'nfl_playoffs').order[0]).toBe('p_jo_allen');
+    expect(rankingsFor(get().rankings, 'nfl').order[0]).toBe('p_ja_chase');
+    // A slate with no players yet has an empty list, not the NFL one.
+    expect(rankingsFor(get().rankings, 'nba').order).toEqual([]);
+    get().resetRankings('nfl_playoffs');
+    expect(get().rankings.nfl_playoffs).toBeUndefined();
+  });
+
+  it('fast and slow contests on the same slate draft from the same list', () => {
+    get().editRankings('nfl', (r) => moveRankToTop(r, 'p_tr_kelce'));
+    expect(slateFor({ contestId: 'c_two_minute_drill' })).toBe('nfl');
+    expect(slateFor({ contestId: 'c_gridiron_gauntlet' })).toBe('nfl');
+    for (const contest of ['c_two_minute_drill', 'c_gridiron_gauntlet']) {
+      const id = enter(contest);
+      get().setAutodraft(id, true);
+      let t = Date.now();
+      for (let i = 0; i < 400 && !draft(id).state.picks.some((p) => p.entrantId === ME); i++) get().tick((t += 2000));
+      const kelce = draft(id).state.picks.find((p) => p.playerId === 'p_tr_kelce');
+      if (!kelce || kelce.entrantId === ME) expect(draft(id).state.picks.find((p) => p.entrantId === ME)?.playerId).toBe('p_tr_kelce');
+    }
   });
 
   it('the queue still beats rankings', () => {
-    get().editRankings('fast12', (r) => moveRankToTop(r, 'p_tr_kelce'));
+    get().editRankings('nfl', (r) => moveRankToTop(r, 'p_tr_kelce'));
     const id = enter('c_two_minute_drill');
     get().toggleQueue(id, 'p_da_njoku');
     get().setAutodraft(id, true);
@@ -211,7 +227,7 @@ describe('multi-entry', () => {
   });
 
   it('autodrafts every entry to completion in the background from rankings', () => {
-    get().editRankings('fast12', (r) => toggleExcluded(r, 'p_ja_chase'));
+    get().editRankings('nfl', (r) => toggleExcluded(r, 'p_ja_chase'));
     const r = get().enterContest('c_two_minute_drill', { count: 2, autodraft: true });
     if (!r.ok) throw new Error(r.error);
     let t = Date.now();
