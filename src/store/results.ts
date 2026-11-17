@@ -163,6 +163,8 @@ export interface LiveTeam {
   /** MOCK amount this team would win if the season ended now. */
   winning: number;
   advancing: boolean;
+  /** Points behind the last paying spot in the pod, when outside it. */
+  gap: number | null;
   counts: Record<'QB' | 'RB' | 'WR' | 'TE', number>;
   createdAt: number;
 }
@@ -172,7 +174,8 @@ const countsCache = new Map<string, LiveTeam['counts']>();
 /** A completed draft as it stands after `week` weeks of its simulated season. */
 export function liveTeam(d: DraftEntry, week: number): LiveTeam {
   const r = draftResult(d);
-  const mine = podStandings(r.standings, week).find((l) => l.entrantId === ME);
+  const pod = podStandings(r.standings, week);
+  const mine = pod.find((l) => l.entrantId === ME);
   const contest = contestById(d.contestId);
   const table = contest ? payoutTable(contest) : { places: [], advance: 0 };
   let counts = countsCache.get(d.id);
@@ -182,6 +185,11 @@ export function liveTeam(d: DraftEntry, week: number): LiveTeam {
     countsCache.set(d.id, counts);
   }
   const rank = mine?.rank ?? null;
+  // The cut line: the lowest rank that still pays or advances.
+  let lastPaid = 0;
+  for (let k = 1; k <= d.state.config.teams; k++) if (winningAt(k, table) > 0 || isAdvancing(k, table)) lastPaid = k;
+  const line = pod.find((l) => l.rank === lastPaid);
+  const gap = rank !== null && lastPaid > 0 && rank > lastPaid && line && mine ? Math.max(0, line.points - mine.points) : null;
   return {
     id: d.id,
     contestId: d.contestId,
@@ -192,6 +200,7 @@ export function liveTeam(d: DraftEntry, week: number): LiveTeam {
     points: mine?.points ?? 0,
     winning: winningAt(rank, table),
     advancing: isAdvancing(rank, table),
+    gap,
     counts,
     createdAt: d.createdAt,
   };

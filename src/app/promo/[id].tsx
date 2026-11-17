@@ -44,7 +44,7 @@ export default function PromoDetails() {
         <MockNote text="Mock credit only. No cash value. Terms shown here are placeholders." />
       </ScrollView>
       <View style={s.footer}>
-        <Button variant="secondary" label="Back to the lobby" onPress={() => router.back()} />
+        <Button variant="secondary" label="Got it. Find a pod" onPress={() => router.back()} />
       </View>
     </Screen>
   );

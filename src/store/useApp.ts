@@ -526,7 +526,7 @@ export const useApp = create<AppState>()(
           get().tick(now);
           const auto = get().drafts[draftId]?.state.picks.filter((p) => p.entrantId === ME).pop();
           const who = auto ? PLAYERS.find((p) => p.id === auto.playerId)?.name : undefined;
-          return who ? `Clock ran out. Autopick took ${who}.` : 'Clock ran out. Autopick made the pick.';
+          return who ? `Clock won. Autopick took ${who}.` : 'Clock won. Autopick made the pick.';
         }
         try {
           const state = makePick(d.state, ME, playerId, { now });

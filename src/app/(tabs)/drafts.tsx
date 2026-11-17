@@ -128,7 +128,7 @@ export default function Drafts() {
           keyExtractor={(t) => t.id}
           contentContainerStyle={s.list}
           renderItem={({ item }) => <ResultRow t={item} />}
-          ListEmptyComponent={<Empty title="No finishes yet." body="Draft a team and play the season out." action={findPod} />}
+          ListEmptyComponent={<Empty title="No scars yet." body="Draft a team. The season will hand you some." action={findPod} />}
         />
       ) : (
         <Empty
@@ -302,8 +302,8 @@ function LiveView({ teams, week, sel, empty, season }: { teams: LiveTeam[]; week
           </View>
           <View style={s.ovStats}>
             <Stat label="Entries" value={String(sum.entries)} />
-            <Stat label="At stake" value={formatMoney(sum.atStake)} />
-            <Stat label="Winning" value={formatMoney(sum.winning)} />
+            <Stat label="Paid in" value={formatMoney(sum.atStake)} />
+            <Stat label="On pace for" value={formatMoney(sum.winning)} />
           </View>
           <SnakeFill value={Math.min(1, week / SEASON_WEEKS)} color={c.primary} track={c.border} humps={SEASON_WEEKS} amp={4} height={16} />
         </View>
@@ -353,7 +353,15 @@ function LiveView({ teams, week, sel, empty, season }: { teams: LiveTeam[]; week
           <View style={{ alignItems: 'flex-end', gap: 3 }}>
             <Text style={s.pts}>{formatPts(t.points)}</Text>
             <Text style={[s.metaStrong, { color: t.winning ? c.text : c.textMuted }]}>
-              {t.winning ? `${t.advancing ? 'Advancing · ' : ''}${formatMoney(t.winning)}` : 'Outside the money'}
+              {t.rank === null
+                ? 'Kicks off week 1'
+                : t.winning
+                ? `${t.advancing ? 'Through · ' : ''}${formatMoney(t.winning)}`
+                : week >= SEASON_WEEKS
+                  ? 'Missed the cut'
+                  : t.gap !== null
+                    ? `${formatPts(t.gap)} pts back`
+                    : 'Missed the cut'}
             </Text>
           </View>
         </Tap>

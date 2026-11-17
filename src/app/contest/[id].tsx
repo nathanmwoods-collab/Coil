@@ -178,14 +178,14 @@ export default function ContestDetail() {
               <Mode
                 on={mode === 'self'}
                 label={n === 1 ? 'Draft it myself' : 'Draft them myself'}
-                hint={n === 1 ? 'Straight to the room.' : `${n} pods open at once. Find them in Drafts.`}
+                hint={n === 1 ? 'Straight to the room.' : `${n} rooms, ${n} clocks. They're all in Drafts.`}
                 onPress={() => setMode('self')}
                 testID="mode-self"
               />
               <Mode
                 on={mode === 'auto'}
                 label="Autodraft from my rankings"
-                hint={`Uses your ${listName} list. Done in seconds.`}
+                hint={`Your ${listName} list drafts for you. Over in seconds, no take-backs.`}
                 onPress={() => setMode('auto')}
                 testID="mode-auto"
               />
