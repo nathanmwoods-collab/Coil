@@ -4,9 +4,9 @@ import { FlatList, SectionList, Text, View } from 'react-native';
 
 import { Check, ChevronRight } from '../../components/icons';
 import { SnakeFill } from '../../components/SnakeFill';
-import { Button, Card, Empty, formatMoney, formatPts, ordinal, relativeDay, Screen, Segmented, Tap } from '../../components/ui';
-import { SEASON_WEEKS } from '../../data';
-import { groupBy, liveSummary, onTheClock, picksUntilTurn, POSITIONS, totalPicks } from '../../engine';
+import { Button, Card, Chip, Empty, formatMoney, formatPts, ordinal, relativeDay, Screen, Segmented, Tap } from '../../components/ui';
+import { SEASON_WEEKS, SPORTS } from '../../data';
+import { groupBy, type Sport, liveSummary, onTheClock, picksUntilTurn, POSITIONS, totalPicks } from '../../engine';
 import { setRenameSelection } from '../../lib/renameSelection';
 import { liveTeam, type LiveTeam } from '../../store/results';
 import { contestById, ME, teamName, useApp, type DraftEntry } from '../../store/useApp';
@@ -24,7 +24,18 @@ export default function Drafts() {
     return { active: all.filter((d) => d.state.status !== 'complete'), done: all.filter((d) => d.state.status === 'complete') };
   }, [drafts]);
   const [tab, setTab] = useState<Tab>(active.length || !done.length ? 'active' : 'live');
-  const teams = useMemo(() => (tab === 'active' ? [] : done.map((d) => liveTeam(d, tab === 'results' ? SEASON_WEEKS : week))), [done, week, tab]);
+  // Seasons are per sport: Live and Results show one sport at a time.
+  const [sport, setSport] = useState<Sport>('nfl');
+  const sportLabel = SPORTS.find((x) => x.key === sport)?.label ?? 'NFL';
+  const teams = useMemo(
+    () =>
+      tab === 'active'
+        ? []
+        : done
+            .filter((d) => (contestById(d.contestId)?.sport ?? 'nfl') === sport || tab === 'completed')
+            .map((d) => liveTeam(d, tab === 'results' ? SEASON_WEEKS : week)),
+    [done, week, tab, sport],
+  );
   const seasonOver = week >= SEASON_WEEKS;
   // Rename mode: rows turn into checkboxes on Completed and Live.
   const [picked, setPicked] = useState<Set<string> | null>(null);
@@ -59,6 +70,13 @@ export default function Drafts() {
             { key: 'results', label: 'Results' },
           ]}
         />
+        {tab === 'live' || tab === 'results' ? (
+          <View style={s.sports} accessibilityRole="tablist">
+            {SPORTS.map((sp) => (
+              <Chip key={sp.key} label={sp.label} active={sport === sp.key} onPress={() => setSport(sp.key)} />
+            ))}
+          </View>
+        ) : null}
         {canRename ? (
           <View style={s.tools}>
             {selecting ? (
@@ -96,7 +114,13 @@ export default function Drafts() {
           ListEmptyComponent={<Empty title="No teams in the books." body="Finish a draft and it lands here." action={findPod} />}
         />
       ) : tab === 'live' ? (
-        <LiveView teams={teams} week={week} sel={sel} empty={<Empty title="No teams in the season yet." body="Finish a draft and it starts scoring here." action={findPod} />} />
+        <LiveView
+          teams={teams}
+          week={week}
+          sel={sel}
+          season={`${sportLabel} 2026 season`}
+          empty={<Empty title={`No ${sportLabel} teams in the season yet.`} body="Finish a draft and it starts scoring here." action={findPod} />}
+        />
       ) : seasonOver ? (
         <FlatList
           data={teams}
@@ -244,7 +268,7 @@ function ResultRow({ t }: { t: LiveTeam }) {
   );
 }
 
-function LiveView({ teams, week, sel, empty }: { teams: LiveTeam[]; week: number; sel?: Selection; empty: React.ReactElement }) {
+function LiveView({ teams, week, sel, empty, season }: { teams: LiveTeam[]; week: number; sel?: Selection; empty: React.ReactElement; season: string }) {
   const s = useStyles();
   const c = useColors();
   const sum = useMemo(() => liveSummary(teams.map((t) => ({ fee: t.fee, winning: t.winning }))), [teams]);
@@ -270,7 +294,7 @@ function LiveView({ teams, week, sel, empty }: { teams: LiveTeam[]; week: number
       ListHeaderComponent={
         <View style={s.overview} testID="live-overview">
           <View style={s.ovTop}>
-            <Text style={s.ovSeason}>2026 season</Text>
+            <Text style={s.ovSeason}>{season}</Text>
             <Text style={s.ovWeek}>{weekLine} · mock</Text>
           </View>
           <View style={s.ovStats}>
@@ -350,6 +374,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 const useStyles = makeStyles((c) => ({
   header: { padding: 16, paddingBottom: 0, gap: 8 },
   title: { ...type.display40, color: c.text },
+  sports: { flexDirection: 'row', gap: 6 },
   tools: { flexDirection: 'row', justifyContent: 'flex-end', gap: 4, marginBottom: -8 },
   tool: { minHeight: 40, paddingHorizontal: 8, justifyContent: 'center' },
   toolText: { ...type.smallStrong, color: c.textMuted },

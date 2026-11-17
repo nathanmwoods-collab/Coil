@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { archetype, buildProfile, formatTeamName, MAX_TEAM_NAME, primaryStack, stackLabel, surname, teamStructure, type NameContext, type StackPlayer } from '../naming';
+import { archetype, buildProfile, formatTeamName, MAX_TEAM_NAME, primaryStack, stackLabel, stackTeams, surname, teamStructure, type NameContext, type StackPlayer } from '../naming';
 import type { Position } from '../types';
 
 const pl = (name: string, team: string, position: Position, adp: number): StackPlayer => ({ name, team, position, adp });
@@ -147,5 +147,25 @@ describe('build profile and quips', () => {
       if ((m = line.match(/^(\d+) backs early, (\d+) all season/)))
         expect(team.filter((p) => p.position === 'RB').length).toBe(+m[2]);
     }
+  });
+});
+
+describe('stack teams token', () => {
+  const pl = (team: string, position: Position): StackPlayer => ({ name: `${team} ${position}`, team, position, adp: 50 });
+  it('names every QB stack, biggest first', () => {
+    const roster = [pl('KC', 'QB'), pl('KC', 'TE'), pl('IND', 'QB'), pl('IND', 'WR'), pl('IND', 'WR'), pl('DET', 'RB'), pl('DET', 'WR')];
+    expect(stackTeams(roster)).toEqual(['IND', 'KC']);
+  });
+  it('falls back to same-team groups without a QB stack', () => {
+    expect(stackTeams([pl('DET', 'RB'), pl('DET', 'WR'), pl('MIA', 'WR')])).toEqual(['DET']);
+    expect(stackTeams([pl('DET', 'RB'), pl('MIA', 'WR')])).toEqual([]);
+  });
+  it('formats as a name token', () => {
+    const ctx: NameContext = {
+      counts: { QB: 2, RB: 5, WR: 8, TE: 3 }, archetype: 'Zero RB', stack: null, stackTeams: ['IND', 'KC'],
+      draftedAt: Date.UTC(2026, 10, 14), contestName: 'Two-Minute Drill', slot: 4,
+    };
+    expect(formatTeamName(['stackTeams'], ctx)).toBe('IND KC');
+    expect(formatTeamName(['stackTeams'], { ...ctx, stackTeams: [] })).toBe('No stack');
   });
 });

@@ -32,3 +32,18 @@ export function exposure(
     .filter((r): r is ExposureRow => !!r)
     .sort((a, b) => b.pct - a.pct || a.avgPick - b.avgPick);
 }
+
+/** Fewest teams before Exposure will call you "the ___ guy". */
+export const GUY_MIN_TEAMS = 3;
+
+/**
+ * The Exposure headline. With fewer than GUY_MIN_TEAMS teams every player is
+ * at 50% or 100% and the call is noise, so it says so instead. At 3+ teams it
+ * names your most-drafted player if he is on at least half of them.
+ */
+export function exposureHeadline(rows: ExposureRow[], teams: number): { kind: 'guy'; row: ExposureRow } | { kind: 'early'; text: string } | null {
+  if (teams <= 0) return null;
+  if (teams < GUY_MIN_TEAMS) return { kind: 'early', text: `${teams === 1 ? 'One team' : 'Two teams'} in. Too early to call you anything.` };
+  const top = rows.find((r) => r.pct >= 50);
+  return top ? { kind: 'guy', row: top } : null;
+}

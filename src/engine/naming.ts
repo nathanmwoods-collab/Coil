@@ -204,18 +204,38 @@ export function surname(full: string): string {
   return parts.length > 2 && /^(st\.?|de|van|von|la|le)$/i.test(parts[parts.length - 2]) ? `${parts[parts.length - 2]} ${last}` : last;
 }
 
+/**
+ * Every team the roster stacks, biggest first: teams where a QB has at least
+ * one of his pass catchers, else teams with two or more players. ["IND", "KC"].
+ */
+export function stackTeams(roster: StackPlayer[]): string[] {
+  const byTeam = new Map<string, StackPlayer[]>();
+  for (const p of roster) byTeam.set(p.team, [...(byTeam.get(p.team) ?? []), p]);
+  const qbStacks: [string, number][] = [];
+  const groups: [string, number][] = [];
+  for (const [team, group] of byTeam) {
+    const hasQb = group.some((p) => p.position === 'QB');
+    const catchers = group.filter((p) => p.position === 'WR' || p.position === 'TE').length;
+    if (hasQb && catchers) qbStacks.push([team, group.length]);
+    else if (group.length >= 2) groups.push([team, group.length]);
+  }
+  const order = (xs: [string, number][]) => xs.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map((x) => x[0]);
+  return qbStacks.length ? order(qbStacks) : order(groups);
+}
+
 /** "PHI stack: Hurts+Brown" (at most three names). */
 export function stackLabel(stack: Stack | null): string {
   if (!stack) return 'No stack';
   return `${stack.team} stack: ${stack.players.slice(0, 3).map((p) => surname(p.name)).join('+')}`;
 }
 
-export type NameToken = 'structure' | 'archetype' | 'stack' | 'date' | 'contest' | 'slot' | 'counter';
+export type NameToken = 'structure' | 'archetype' | 'stack' | 'stackTeams' | 'date' | 'contest' | 'slot' | 'counter';
 
 export const NAME_TOKENS: { key: NameToken; label: string; example: string }[] = [
   { key: 'archetype', label: 'Build', example: 'Zero RB' },
   { key: 'structure', label: 'Structure', example: '3QB-6RB-7WR-2TE' },
   { key: 'stack', label: 'Stack', example: 'PHI stack: Hurts+Brown' },
+  { key: 'stackTeams', label: 'Stack teams', example: 'IND KC' },
   { key: 'date', label: 'Date drafted', example: 'Nov 14' },
   { key: 'contest', label: 'Contest', example: 'Two-Minute Drill' },
   { key: 'slot', label: 'Draft slot', example: 'Pick 4' },
@@ -226,6 +246,8 @@ export interface NameContext {
   counts: Counts;
   archetype: Archetype;
   stack: Stack | null;
+  /** Abbreviations of every stacked team, biggest first. Optional for older callers. */
+  stackTeams?: string[];
   /** Epoch ms the draft was entered. */
   draftedAt: number;
   contestName: string;
@@ -244,6 +266,8 @@ function tokenText(t: NameToken, ctx: NameContext, index: number): string {
       return ctx.archetype;
     case 'stack':
       return stackLabel(ctx.stack);
+    case 'stackTeams':
+      return ctx.stackTeams?.length ? ctx.stackTeams.slice(0, 3).join(' ') : 'No stack';
     case 'date':
       return new Date(ctx.draftedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     case 'contest':
