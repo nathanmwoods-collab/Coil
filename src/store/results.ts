@@ -1,17 +1,23 @@
-import { PLAYER_MAP, PLAYERS, simulateSeason, simulateTournament } from '../data';
+import { payoutTable, PLAYER_MAP, PLAYERS, SEASON_WEEKS, simulateSeason, simulateTournament } from '../data';
 import {
+  archetype,
   exposure,
+  primaryStack,
+  type NameContext,
+  isAdvancing,
   optimalLineup,
+  podStandings,
+  winningAt,
   rosterOf,
   rosterPlayers,
   type ExposureRow,
   type Player,
   type WeekLineup,
 } from '../engine';
-import { ME, type DraftEntry } from './useApp';
+import { contestById, ME, teamName, type DraftEntry } from './useApp';
 
 export const PLAYER_BY_ID: Map<string, Player> = PLAYER_MAP;
-export const SEASON_WEEKS = 17;
+export { SEASON_WEEKS };
 
 export interface Standing {
   entrantId: string;
@@ -91,4 +97,129 @@ export function exposureFor(drafts: DraftEntry[]): ExposureWithDollars[] {
     for (const p of teams[i]) dollars.set(p.playerId, (dollars.get(p.playerId) ?? 0) + d.entryFee);
   });
   return exposure(teams, PLAYER_BY_ID).map((r) => ({ ...r, dollars: dollars.get(r.player.id) ?? 0 }));
+}
+
+export type BuildName = 'Zero RB' | 'Hero RB' | 'Robust RB' | 'Balanced';
+
+export interface TeamIdentity {
+  build: BuildName;
+  /** e.g. "Hurts + A.J. Brown", or null with no QB stack. */
+  stack: string | null;
+  counts: Record<'QB' | 'RB' | 'WR' | 'TE', number>;
+  /** One wry line about how the team was built. */
+  line: string;
+}
+
+const lastName = (full: string) => {
+  const parts = full.split(' ').filter((w) => !/^(jr\.?|sr\.?|ii|iii|iv|v)$/i.test(w));
+  return parts[parts.length - 1] ?? full;
+};
+
+/** The "Your coil" card: a build name, your best stack and one wry line, all from the roster. */
+export function teamIdentity(state: DraftEntry['state'], entrantId: string = ME): TeamIdentity {
+  const picks = rosterOf(state, entrantId)
+    .map((p) => ({ pick: p, player: PLAYER_BY_ID.get(p.playerId) }))
+    .filter((x): x is { pick: typeof x.pick; player: Player } => !!x.player);
+
+  const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const x of picks) counts[x.player.position]++;
+
+  const build: BuildName = archetype(
+    picks.map((x) => ({ round: x.pick.round, position: x.player.position })),
+    state.config.rounds,
+  );
+
+  let stack: string | null = null;
+  let bestScore = -1;
+  for (const qb of picks.filter((x) => x.player.position === 'QB')) {
+    const mates = picks
+      .filter((x) => (x.player.position === 'WR' || x.player.position === 'TE') && x.player.team === qb.player.team)
+      .sort((a, b) => a.player.adp - b.player.adp);
+    if (!mates.length) continue;
+    const score = mates.length * 1000 - mates[0].player.adp;
+    if (score > bestScore) {
+      bestScore = score;
+      stack = [lastName(qb.player.name), ...mates.slice(0, 2).map((m) => m.player.name)].join(' + ');
+    }
+  }
+
+  const reaches = picks.filter((x) => x.pick.overall < x.player.adp - 12).length;
+  const values = picks.filter((x) => x.pick.overall > x.player.adp + 12).length;
+  const line =
+    reaches >= 4
+      ? 'Took your guys. ADP can deal with it.'
+      : values >= 4
+        ? 'Let the room hand you value all day.'
+        : build === 'Zero RB'
+          ? 'Let everyone else pay for running backs.'
+          : build === 'Robust RB'
+            ? 'Bought the whole backfield early. Bold.'
+            : build === 'Hero RB'
+              ? 'One anchor back, then all the swings.'
+              : 'Took the chalk early and the swings late.';
+
+  return { build, stack, counts, line };
+}
+
+export interface LiveTeam {
+  id: string;
+  contestId: string;
+  name: string;
+  fee: number;
+  /** Rank in the pod through the current week; null before week 1. */
+  rank: number | null;
+  of: number;
+  points: number;
+  /** MOCK amount this team would win if the season ended now. */
+  winning: number;
+  advancing: boolean;
+  counts: Record<'QB' | 'RB' | 'WR' | 'TE', number>;
+  createdAt: number;
+}
+
+const countsCache = new Map<string, LiveTeam['counts']>();
+
+/** A completed draft as it stands after `week` weeks of its simulated season. */
+export function liveTeam(d: DraftEntry, week: number): LiveTeam {
+  const r = draftResult(d);
+  const mine = podStandings(r.standings, week).find((l) => l.entrantId === ME);
+  const contest = contestById(d.contestId);
+  const table = contest ? payoutTable(contest) : { places: [], advance: 0 };
+  let counts = countsCache.get(d.id);
+  if (!counts) {
+    counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+    for (const p of r.roster) counts[p.position]++;
+    countsCache.set(d.id, counts);
+  }
+  const rank = mine?.rank ?? null;
+  return {
+    id: d.id,
+    contestId: d.contestId,
+    name: teamName(d),
+    fee: d.entryFee,
+    rank,
+    of: d.state.config.teams,
+    points: mine?.points ?? 0,
+    winning: winningAt(rank, table),
+    advancing: isAdvancing(rank, table),
+    counts,
+    createdAt: d.createdAt,
+  };
+}
+
+/** Everything `formatTeamName` needs to name a completed (or in-progress) team. */
+export function namingContext(d: DraftEntry): NameContext {
+  const picks = rosterOf(d.state, ME)
+    .map((p) => ({ round: p.round, player: PLAYER_BY_ID.get(p.playerId) }))
+    .filter((x): x is { round: number; player: Player } => !!x.player);
+  const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const x of picks) counts[x.player.position]++;
+  return {
+    counts,
+    archetype: archetype(picks.map((x) => ({ round: x.round, position: x.player.position })), d.state.config.rounds),
+    stack: primaryStack(picks.map((x) => x.player)),
+    draftedAt: d.createdAt,
+    contestName: contestById(d.contestId)?.name ?? 'Draft',
+    slot: d.state.entrants.findIndex((e) => e.id === ME) + 1,
+  };
 }

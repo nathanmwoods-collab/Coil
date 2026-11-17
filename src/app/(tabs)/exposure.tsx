@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { memo, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
 
-import { Button, Chip, Empty, formatMoney, PosPill, ProgressBar, Screen } from '../../components/ui';
+import { Button, Chip, Empty, formatMoney, PosPill, ProgressBar, Screen, Tap } from '../../components/ui';
 import type { Position } from '../../engine';
 import { exposureFor, type ExposureWithDollars } from '../../store/results';
 import { useApp, type DraftEntry } from '../../store/useApp';
+import { feel } from '../../lib/feel';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 
 type PosFilter = 'All' | Position;
@@ -29,6 +31,9 @@ export default function Exposure() {
     return { rows: exposureFor(done), teams: done.length, spent: done.reduce((n, d) => n + d.entryFee, 0) };
   }, [doneKey]);
 
+  // "You're the ___ guy": the player you keep coming back to, once there's more than one team to judge by.
+  const guy = teams >= 2 ? rows.find((r) => r.pct >= 50) : undefined;
+
   const filtered = useMemo(() => {
     const list = pos === 'All' ? rows : rows.filter((r) => r.player.position === pos);
     return mode === 'dollars' ? [...list].sort((a, b) => b.dollars - a.dollars) : list;
@@ -39,22 +44,30 @@ export default function Exposure() {
       <View style={s.header}>
         <Text style={s.title}>Exposure</Text>
         <Text style={s.sub}>
-          {teams} completed {teams === 1 ? 'team' : 'teams'} · {formatMoney(spent)} mock entry fees
+          {teams} {teams === 1 ? 'team' : 'teams'} · {formatMoney(spent)} in (mock)
         </Text>
+        {guy ? (
+          <Text style={s.guy} testID="exposure-guy">
+            You're the <Text style={{ color: c[guy.player.position] }}>{guy.player.name}</Text> guy. {guy.count} of {teams} teams.
+          </Text>
+        ) : null}
       </View>
       <View style={s.controls}>
         {(['All', 'QB', 'RB', 'WR', 'TE'] as PosFilter[]).map((p) => (
           <Chip key={p} label={p} active={pos === p} color={p === 'All' ? undefined : c[p]} onPress={() => setPos(p)} />
         ))}
         <View style={{ flex: 1 }} />
-        <Pressable
+        <Tap
           accessibilityRole="button"
           accessibilityLabel={mode === 'pct' ? 'Show mock dollars' : 'Show percent'}
-          onPress={() => setMode(mode === 'pct' ? 'dollars' : 'pct')}
+          onPress={() => {
+            feel.select();
+            setMode(mode === 'pct' ? 'dollars' : 'pct');
+          }}
           style={s.mode}
         >
           <Text style={s.modeText}>{mode === 'pct' ? '%' : '$'}</Text>
-        </Pressable>
+        </Tap>
       </View>
       <FlatList
         data={filtered}
@@ -64,9 +77,9 @@ export default function Exposure() {
         contentContainerStyle={{ paddingBottom: 32 }}
         ListEmptyComponent={
           <Empty
-            title="No exposure yet"
-            body="Complete a draft and we’ll track how much of your portfolio each player makes up."
-            action={<Button small label="Find a draft" onPress={() => router.navigate('/')} />}
+            title="Clean slate."
+            body="Draft a team and we'll show who you keep coming back to."
+            action={<Button small label="Find a pod" onPress={() => router.navigate('/')} />}
           />
         }
       />
@@ -88,7 +101,7 @@ const Row = memo(function Row({ r, mode, spent }: { r: ExposureWithDollars; mode
           </Text>
           <Text style={s.pct}>{mode === 'pct' ? `${r.pct}%` : formatMoney(r.dollars)}</Text>
         </View>
-        <ProgressBar value={value} color={c[r.player.position]} height={5} />
+        <ProgressBar value={value} color={c[r.player.position]} height={4} track={c.border} />
         <Text style={s.meta}>
           {r.player.team} · {r.count} {r.count === 1 ? 'team' : 'teams'} · avg pick {r.avgPick} · ADP {r.player.adp.toFixed(1)}
           {mode === 'pct' ? ` · ${formatMoney(r.dollars)}` : ` · ${r.pct}%`}
@@ -100,13 +113,14 @@ const Row = memo(function Row({ r, mode, spent }: { r: ExposureWithDollars; mode
 
 const useStyles = makeStyles((c) => ({
   header: { padding: 16, paddingBottom: 8 },
-  title: { color: c.text, fontSize: 26, fontWeight: '900' },
-  sub: { color: c.textMuted, fontSize: 13, marginTop: 2 },
+  title: { ...type.display40, color: c.text },
+  sub: { ...type.small, color: c.textMuted, marginTop: 2 },
+  guy: { ...type.display24, color: c.text, marginTop: 12 },
   controls: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingBottom: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: c.border },
-  mode: { width: 44, height: 36, borderRadius: 10, backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  modeText: { color: c.text, fontWeight: '900', fontSize: 15 },
-  row: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.border },
-  name: { color: c.text, fontSize: 14, fontWeight: '700', flex: 1 },
-  pct: { color: c.text, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  meta: { color: c.textMuted, fontSize: 11 },
+  mode: { width: 44, height: 34, borderRadius: 17, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+  modeText: { fontFamily: fonts.mono, color: c.text, fontSize: 14 },
+  row: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.border + '99' },
+  name: { ...type.smallStrong, fontSize: 14, color: c.text, flex: 1 },
+  pct: { fontFamily: fonts.mono, color: c.text, fontSize: 14 },
+  meta: { ...type.micro, color: c.textMuted },
 }));

@@ -1,10 +1,23 @@
+import { BigShoulders_800ExtraBold, BigShoulders_900Black } from '@expo-google-fonts/big-shoulders';
+import { DMMono_500Medium } from '@expo-google-fonts/dm-mono';
+import {
+  SchibstedGrotesk_400Regular,
+  SchibstedGrotesk_600SemiBold,
+  SchibstedGrotesk_800ExtraBold,
+} from '@expo-google-fonts/schibsted-grotesk';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { SpringbackToast } from '../components/SpringbackToast';
 import { useApp } from '../store/useApp';
 import { useColors } from '../theme/useTheme';
+
+// Hold the splash until the type system is ready, so nothing flashes in the system font.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /** Drives bot picks and clock expiry for every live draft, app-wide. */
 function DraftTicker() {
@@ -17,23 +30,59 @@ function DraftTicker() {
   return null;
 }
 
+/** Pays out Springback when a Wednesday has passed: on launch, then once a minute. MOCK credit only. */
+function SpringbackClock() {
+  const hydrated = useApp((s) => s.hydrated);
+  useEffect(() => {
+    if (!hydrated) return;
+    const run = () => useApp.getState().settleSpringback();
+    run();
+    const t = setInterval(run, 60_000);
+    return () => clearInterval(t);
+  }, [hydrated]);
+  return null;
+}
+
 export default function RootLayout() {
   const c = useColors();
+  const [loaded, error] = useFonts({
+    BigShoulders_800ExtraBold,
+    BigShoulders_900Black,
+    SchibstedGrotesk_400Regular,
+    SchibstedGrotesk_600SemiBold,
+    SchibstedGrotesk_800ExtraBold,
+    DMMono_500Medium,
+  });
+  const ready = loaded || !!error;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
   return (
     <SafeAreaProvider style={{ backgroundColor: c.bg }}>
       <StatusBar style="light" />
       <DraftTicker />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: c.bg },
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="contest/[id]" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="draft/[id]" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="results/[id]" />
-      </Stack>
+      <SpringbackClock />
+      {ready ? (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: c.bg },
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="contest/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="deposit" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="promo/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="rankings" />
+          <Stack.Screen name="springback" />
+          <Stack.Screen name="rename" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="draft/[id]" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="results/[id]" />
+        </Stack>
+      ) : null}
+      {ready ? <SpringbackToast /> : null}
     </SafeAreaProvider>
   );
 }

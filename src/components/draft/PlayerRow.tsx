@@ -1,9 +1,13 @@
 import { memo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import type { Player } from '../../engine';
+import { adpMove, type Player } from '../../engine';
+import { feel } from '../../lib/feel';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
-import { PosPill } from '../ui';
+import { ArrowDown, ArrowUp, QueueMark } from '../icons';
+import { PlayerAvatar } from '../PlayerAvatar';
+import { PosPill, Tap } from '../ui';
 
 export type StackTag = 'QB stack' | 'Stack' | null;
 
@@ -15,6 +19,7 @@ export const PlayerRow = memo(function PlayerRow({
   canDraft,
   stack,
   exposurePct,
+  adp,
   onDraft,
   onStar,
 }: {
@@ -23,22 +28,32 @@ export const PlayerRow = memo(function PlayerRow({
   canDraft: boolean;
   stack: StackTag;
   exposurePct?: number;
+  /** Live ADP for this draft type. Defaults to the seed ADP. */
+  adp?: number;
   onDraft: (id: string) => void;
   onStar: (id: string) => void;
 }) {
   const s = useStyles();
   const c = useColors();
+  const shown = adp ?? player.adp;
+  const move = adpMove(player.adp, shown);
   return (
     <View style={s.row}>
-      <Pressable
+      <Tap
         accessibilityRole="button"
         accessibilityLabel={queued ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
-        onPress={() => onStar(player.id)}
+        accessibilityState={{ selected: queued }}
+        onPress={() => {
+          feel.select();
+          onStar(player.id);
+        }}
         style={s.star}
         hitSlop={4}
+        scaleTo={0.85}
       >
-        <Text style={{ fontSize: 20, color: queued ? c.warning : c.border }}>{queued ? '★' : '☆'}</Text>
-      </Pressable>
+        <QueueMark color={c.textMuted} filled={queued} fill={c.accent} size={20} />
+      </Tap>
+      <PlayerAvatar player={player} size={36} />
       <View style={s.main}>
         <View style={s.nameRow}>
           <PosPill pos={player.position} small />
@@ -47,30 +62,39 @@ export const PlayerRow = memo(function PlayerRow({
           </Text>
         </View>
         <View style={s.metaRow}>
-          <Text style={s.meta}>
-            {player.team} · Bye {player.bye} · Proj {Math.round(player.projPoints)}
+          <Text style={[s.meta, { flexShrink: 1 }]} numberOfLines={1}>
+            {player.team} · Bye {player.bye} · {Math.round(player.projPoints)} proj
           </Text>
-          {stack ? (
-            <View style={[s.tag, { backgroundColor: (stack === 'QB stack' ? c.accent : c.primary) + '26' }]}>
-              <Text style={[s.tagText, { color: stack === 'QB stack' ? c.accent : c.primary }]}>{stack}</Text>
-            </View>
+          {stack ? <Text style={[s.tag, { color: stack === 'QB stack' ? c.primary : c.textMuted }]}>{stack}</Text> : null}
+          {exposurePct ? (
+            <Text style={[s.meta, { flexShrink: 0 }]} numberOfLines={1}>
+              · {Math.round(exposurePct)}% exp
+            </Text>
           ) : null}
-          {exposurePct ? <Text style={s.meta}>· {Math.round(exposurePct)}% exp</Text> : null}
         </View>
       </View>
-      <View style={s.adp}>
-        <Text style={s.adpLabel}>ADP</Text>
-        <Text style={s.adpValue}>{player.adp.toFixed(1)}</Text>
+      <View
+        style={s.adp}
+        accessibilityLabel={`ADP ${shown.toFixed(1)}${move ? `, ${move === 'up' ? 'rising' : 'sliding'} from ${player.adp.toFixed(1)}` : ''}`}
+      >
+        <Text style={s.adpValue}>{shown.toFixed(1)}</Text>
+        <View style={s.adpSub}>
+          {move === 'up' ? <ArrowUp color={c.success} size={10} strokeWidth={2.6} /> : move === 'down' ? <ArrowDown color={c.danger} size={10} strokeWidth={2.6} /> : null}
+          <Text style={[s.adpLabel, move ? { color: move === 'up' ? c.success : c.danger } : null]}>
+            {move ? Math.abs(player.adp - shown).toFixed(1) : 'ADP'}
+          </Text>
+        </View>
       </View>
-      <Pressable
+      <Tap
         accessibilityRole="button"
         accessibilityLabel={`Draft ${player.name}`}
         accessibilityState={{ disabled: !canDraft }}
+        disabled={!canDraft}
         onPress={canDraft ? () => onDraft(player.id) : undefined}
-        style={({ pressed }) => [s.draft, !canDraft && s.draftDisabled, pressed && canDraft && { opacity: 0.8 }]}
+        style={[s.draft, !canDraft && s.draftDisabled]}
       >
         <Text style={[s.draftText, !canDraft && { color: c.textMuted }]}>Draft</Text>
-      </Pressable>
+      </Tap>
     </View>
   );
 });
@@ -82,21 +106,21 @@ const useStyles = makeStyles((c) => ({
     alignItems: 'center',
     paddingRight: 12,
     borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    borderBottomColor: c.border + '99',
     backgroundColor: c.bg,
   },
-  star: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  main: { flex: 1, gap: 4, minWidth: 0 },
+  star: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  main: { flex: 1, gap: 3, minWidth: 0, marginLeft: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { color: c.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  name: { ...type.bodyStrong, color: c.text, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meta: { color: c.textMuted, fontSize: 12 },
-  tag: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  tagText: { fontSize: 10, fontWeight: '800' },
-  adp: { width: 48, alignItems: 'flex-end', marginRight: 10 },
-  adpLabel: { color: c.textMuted, fontSize: 9, fontWeight: '700' },
-  adpValue: { color: c.text, fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  draft: { minWidth: 64, height: 44, borderRadius: 10, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
-  draftDisabled: { backgroundColor: c.surfaceAlt },
-  draftText: { color: c.primaryText, fontWeight: '800', fontSize: 13 },
+  meta: { ...type.micro, fontSize: 12, color: c.textMuted },
+  tag: { ...type.label },
+  adp: { width: 46, alignItems: 'flex-end', marginRight: 10 },
+  adpSub: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  adpLabel: { ...type.micro, fontSize: 9, color: c.textMuted },
+  adpValue: { fontFamily: fonts.mono, fontSize: 14, color: c.text },
+  draft: { minWidth: 64, height: 40, borderRadius: 20, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  draftDisabled: { backgroundColor: 'transparent', borderWidth: 1, borderColor: c.border },
+  draftText: { fontFamily: fonts.strong, color: c.bg, fontSize: 13 },
 }));

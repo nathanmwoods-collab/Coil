@@ -3,7 +3,9 @@ import { SectionList, Text, View } from 'react-native';
 
 import { POSITIONS, rosterOf, type DraftState, type Player, type Position } from '../../engine';
 import { ME } from '../../store/useApp';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
+import { PlayerAvatar } from '../PlayerAvatar';
 import { Empty, PosPill } from '../ui';
 
 /** Typical best-ball build ranges for an 18-round draft, scaled to the draft's rounds. */
@@ -39,25 +41,25 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
           {POSITIONS.map((pos) => {
             const n = sections.find((x) => x.pos === pos)?.data.length ?? 0;
             const [lo, hi] = targets[pos];
-            const color = n < lo ? c.textMuted : n > hi ? c.warning : c.success;
+            const color = n < lo ? c.textMuted : n > hi ? c.warning : c.text;
             return (
               <View key={pos} style={s.sumCell}>
                 <Text style={[s.sumPos, { color: c[pos] }]}>{pos}</Text>
                 <Text style={[s.sumCount, { color }]}>{n}</Text>
                 <Text style={s.sumTarget}>
-                  target {lo}–{hi}
+                  aim for {lo} to {hi}
                 </Text>
               </View>
             );
           })}
         </View>
       }
-      ListEmptyComponent={<Empty title="No players yet" body="Your picks show up here, grouped by position." />}
+      ListEmptyComponent={<Empty title="Your first pick lands here." />}
       renderSectionHeader={({ section }) => (
         <View style={s.sectionHead}>
           <PosPill pos={section.pos} />
           <Text style={s.sectionText}>
-            {section.data.length} / {targets[section.pos][0]}–{targets[section.pos][1]}
+            {section.data.length} of {targets[section.pos][0]} to {targets[section.pos][1]}
           </Text>
           {total === 0 ? null : <View style={{ flex: 1 }} />}
         </View>
@@ -67,18 +69,19 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
           <Text style={s.pickNo}>
             {item.pick.round}.{String(item.pick.pickInRound).padStart(2, '0')}
           </Text>
+          <PlayerAvatar player={item.player} size={32} />
           <View style={{ flex: 1 }}>
             <Text style={s.name}>{item.player.name}</Text>
             <Text style={s.meta}>
               {item.player.team} · Bye {item.player.bye} · ADP {item.player.adp.toFixed(1)}
-              {item.pick.auto ? ' · auto' : ''}
+              {item.pick.auto ? ' · autopick' : ''}
             </Text>
           </View>
           <Text style={s.proj}>{Math.round(item.player.projPoints)}</Text>
         </View>
       )}
       renderSectionFooter={({ section }) =>
-        section.data.length === 0 ? <Text style={s.none}>None yet</Text> : null
+        section.data.length === 0 ? <Text style={s.none}>Open</Text> : null
       }
     />
   );
@@ -86,16 +89,16 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
 
 const useStyles = makeStyles((c) => ({
   summary: { flexDirection: 'row', gap: 8, padding: 12 },
-  sumCell: { flex: 1, backgroundColor: c.surface, borderRadius: 12, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: c.border },
-  sumPos: { fontSize: 11, fontWeight: '800' },
-  sumCount: { fontSize: 22, fontWeight: '900' },
-  sumTarget: { color: c.textMuted, fontSize: 10 },
+  sumCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
+  sumPos: { ...type.label },
+  sumCount: { fontFamily: fonts.display, fontSize: 32, lineHeight: 34 },
+  sumTarget: { ...type.micro, color: c.textMuted, fontSize: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
-  sectionText: { color: c.textMuted, fontWeight: '700', fontSize: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.border },
-  pickNo: { color: c.textMuted, fontSize: 12, fontWeight: '800', width: 36 },
-  name: { color: c.text, fontSize: 15, fontWeight: '700' },
-  meta: { color: c.textMuted, fontSize: 12 },
-  proj: { color: c.text, fontWeight: '800' },
-  none: { color: c.textMuted, fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
+  sectionText: { ...type.micro, color: c.textMuted, fontSize: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.border + '99' },
+  pickNo: { fontFamily: fonts.mono, color: c.textMuted, fontSize: 12, width: 36 },
+  name: { ...type.bodyStrong, color: c.text },
+  meta: { ...type.micro, color: c.textMuted, fontSize: 12 },
+  proj: { fontFamily: fonts.mono, fontSize: 13, color: c.text },
+  none: { ...type.micro, color: c.textMuted, fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
 }));

@@ -1,18 +1,26 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, LayoutAnimation, Modal, Pressable, Text, TextInput, View } from 'react-native';
 
+import { Alert, Check, ChevronLeft, ChevronRight, More } from '../../components/icons';
 import { BoardGrid } from '../../components/draft/BoardGrid';
+import { Breath } from '../../components/draft/Breath';
+import { CoilReveal } from '../../components/draft/CoilReveal';
 import { Countdown } from '../../components/draft/Countdown';
 import { MyTeam } from '../../components/draft/MyTeam';
 import { PickStrip } from '../../components/draft/PickStrip';
 import { PLAYER_ROW_HEIGHT, PlayerRow, type StackTag } from '../../components/draft/PlayerRow';
 import { QueueList } from '../../components/draft/QueueList';
-import { Button, Chip, Empty, Screen, Segmented } from '../../components/ui';
+import { Button, Chip, Empty, Screen, Segmented, Tap, WindingUp } from '../../components/ui';
 import { PLAYERS } from '../../data';
 import { onTheClock, picksUntilTurn, rosterPlayers, roundOf, totalPicks, type Player, type Position } from '../../engine';
+import { botLine } from '../../lib/banter';
+import { announce, feel } from '../../lib/feel';
+import { searchPlayers } from '../../lib/search';
 import { exposureFor, PLAYER_BY_ID } from '../../store/results';
-import { contestById, ME, useApp, type DraftEntry } from '../../store/useApp';
+import { contestById, draftTypeFor, liveAdp, ME, useApp, type DraftEntry } from '../../store/useApp';
+import { useReducedMotion } from '../../theme/motion';
+import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 
 type Tab = 'players' | 'queue' | 'team' | 'board';
@@ -30,9 +38,9 @@ export default function DraftRoom() {
     return (
       <Screen>
         {hydrated ? (
-          <Empty title="Draft not found" action={<Button label="Back to lobby" onPress={() => router.replace('/')} />} />
+          <Empty title="That draft's gone." action={<Button label="Back to your drafts" onPress={() => router.replace('/drafts')} />} />
         ) : (
-          <Empty title="Loading draft…" />
+          <WindingUp />
         )}
       </Screen>
     );
@@ -51,6 +59,7 @@ function Room({ d }: { d: DraftEntry }) {
   const c = useColors();
   const state = d.state;
   const contest = contestById(d.contestId);
+  const springbackPaid = useApp((st) => st.sbLedger.some((x) => x.kind === 'entry' && x.paidAt != null && x.draftIds.includes(d.id)));
   const draftPlayer = useApp((st) => st.draftPlayer);
   const toggleQueue = useApp((st) => st.toggleQueue);
   const moveQueue = useApp((st) => st.moveQueue);
@@ -70,6 +79,10 @@ function Room({ d }: { d: DraftEntry }) {
   const [sort, setSort] = useState<Sort>('adp');
   const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  // After the draft, the reveal leads; the full board is one tap away.
+  const [showBoard, setShowBoard] = useState(false);
+  const reduced = useReducedMotion();
 
   const clock = onTheClock(state);
   const myTurn = clock?.id === ME;
@@ -77,6 +90,36 @@ function Room({ d }: { d: DraftEntry }) {
   const current = state.picks.length + 1;
   const total = totalPicks(state.config);
   const complete = state.status === 'complete';
+  const clockWords = clockInWords(state.config.pickClockSec);
+
+  // Your turn: the double knock, and a spoken cue for screen readers.
+  const wasMine = useRef(false);
+  useEffect(() => {
+    if (myTurn && !wasMine.current && !(d.autodraft || d.autopilot)) {
+      feel.yourTurn();
+      announce(`You're up. ${clockWords}.`);
+    }
+    wasMine.current = myTurn;
+  }, [myTurn, clockWords, d.autodraft, d.autopilot]);
+
+  // Draft complete: one Success, the first time this room sees it finish.
+  const wasComplete = useRef(complete);
+  useEffect(() => {
+    if (complete && !wasComplete.current) feel.draftComplete();
+    wasComplete.current = complete;
+  }, [complete]);
+
+  useEffect(() => {
+    if (d.autopilot) feel.autopilot();
+  }, [d.autopilot]);
+
+  // Bot banter: the last bot's one-liner, at normal speed only.
+  const lastPick = state.picks[state.picks.length - 1];
+  const banter = useMemo(() => {
+    if (!lastPick || lastPick.entrantId === ME || botSpeed !== 'normal' || complete) return null;
+    const who = state.entrants.find((e) => e.id === lastPick.entrantId);
+    return who ? { name: who.name, line: botLine(who.name, lastPick.overall) } : null;
+  }, [lastPick, botSpeed, complete, state.entrants]);
 
   const taken = useMemo(() => new Set(state.picks.map((p) => p.playerId)), [state.picks]);
   const queued = useMemo(() => new Set(d.queue), [d.queue]);
@@ -98,23 +141,31 @@ function Room({ d }: { d: DraftEntry }) {
     return new Map(exposureFor(done).map((r) => [r.player.id, r.pct]));
   }, [doneKey]);
 
+  // ADP for this draft type: the seed blended with what completed drafts actually did.
+  const adpTable = useApp((st) => st.adp[draftTypeFor(d)]);
+  const adpMap = useMemo(() => new Map(PLAYERS.map((p) => [p.id, liveAdp(adpTable, p.id, p.adp)])), [adpTable]);
+
   const available = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const list = PLAYERS.filter(
-      (p) =>
-        !taken.has(p.id) &&
-        (pos === 'All' || p.position === pos) &&
-        (!needle || p.name.toLowerCase().includes(needle) || p.team.toLowerCase() === needle),
+    const adpOf = (p: Player) => adpMap.get(p.id) ?? p.adp;
+    const pool = PLAYERS.filter((p) => !taken.has(p.id) && (pos === 'All' || p.position === pos)).sort(
+      sort === 'adp' ? (a, b) => adpOf(a) - adpOf(b) : (a, b) => b.projPoints - a.projPoints,
     );
-    return list.sort(sort === 'adp' ? (a, b) => a.adp - b.adp : (a, b) => b.projPoints - a.projPoints);
-  }, [taken, pos, sort, q]);
+    // Search keeps the sort, with exact matches ("cmc", "eagles wr") leading.
+    return searchPlayers(q, pool);
+  }, [taken, pos, sort, q, adpMap]);
 
   const onDraft = useCallback(
     (pid: string) => {
       const err = draftPlayer(d.id, pid);
+      if (err === null) {
+        feel.pickIn();
+        if (!reduced) LayoutAnimation.configureNext(LayoutAnimation.create(180, 'easeInEaseOut', 'opacity'));
+      } else {
+        feel.pickRejected();
+      }
       setError(err);
     },
-    [draftPlayer, d.id],
+    [draftPlayer, d.id, reduced],
   );
   const onStar = useCallback((pid: string) => toggleQueue(d.id, pid), [toggleQueue, d.id]);
   const onMove = useCallback((pid: string, dir: -1 | 1) => moveQueue(d.id, pid, dir), [moveQueue, d.id]);
@@ -137,135 +188,173 @@ function Room({ d }: { d: DraftEntry }) {
         canDraft={myTurn}
         stack={stackFor(item)}
         exposurePct={exposureMap?.get(item.id)}
+        adp={adpMap.get(item.id)}
         onDraft={onDraft}
         onStar={onStar}
       />
     ),
-    [queued, myTurn, stackFor, exposureMap, onDraft, onStar],
+    [queued, myTurn, stackFor, exposureMap, adpMap, onDraft, onStar],
   );
 
   const auto = d.autodraft || d.autopilot;
+  const leave = () => (router.canGoBack() ? router.back() : router.replace('/drafts'));
 
   return (
     <View style={s.flex}>
-      {/* Header */}
       <View style={s.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Leave draft room" onPress={() => (router.canGoBack() ? router.back() : router.replace('/drafts'))} style={s.back}>
-          <Text style={s.backText}>‹</Text>
-        </Pressable>
+        <Tap accessibilityRole="button" accessibilityLabel="Leave draft room" onPress={leave} style={s.iconBtn}>
+          <ChevronLeft color={c.text} />
+        </Tap>
         <View style={{ flex: 1 }}>
           <Text style={s.contestName} numberOfLines={1}>
             {contest?.name ?? 'Draft'}
           </Text>
           <Text style={s.sub}>
-            {complete ? `Complete · ${total} picks` : `Round ${roundOf(current, state.config.teams)} of ${state.config.rounds} · Pick ${current} of ${total}`}
+            {complete ? `${total} picks in the books` : `Round ${roundOf(current, state.config.teams)} of ${state.config.rounds} · pick ${current} of ${total}`}
           </Text>
         </View>
-        {myTurn ? (
-          <Countdown endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} mine compact />
+        {d.autodraft && !complete ? (
+          <View style={s.autoChip}>
+            <Text style={s.autoChipText}>Autopilot</Text>
+          </View>
+        ) : null}
+        {!complete ? (
+          <Tap accessibilityRole="button" accessibilityLabel="Draft settings" onPress={() => setMenu(true)} style={s.iconBtn} testID="draft-menu">
+            <More color={c.textMuted} />
+          </Tap>
         ) : null}
       </View>
 
-      {/* On-the-clock banner */}
-      {complete ? (
-        <View style={[s.banner, { backgroundColor: c.success + '22', borderColor: c.success }]}>
+      {complete ? null : myTurn ? (
+        <View style={s.banner} testID="on-the-clock">
+          <Breath endsAt={state.clockEndsAt} color={c.accent} radius={16} />
           <View style={{ flex: 1 }}>
-            <Text style={[s.bannerTitle, { color: c.success }]}>Draft complete</Text>
-            <Text style={s.bannerSub}>Your team is locked. See how the season plays out.</Text>
-          </View>
-          <Button small label="Results" onPress={() => router.replace(`/results/${d.id}`)} testID="view-results" />
-        </View>
-      ) : myTurn ? (
-        <View style={[s.banner, { backgroundColor: c.primary, borderColor: c.primary }]} testID="on-the-clock">
-          <View style={{ flex: 1 }}>
-            <Text style={[s.bannerTitle, { color: c.primaryText }]}>You're on the clock</Text>
-            <Text style={[s.bannerSub, { color: c.primaryText, opacity: 0.85 }]}>
-              {auto ? 'Autodraft is picking for you…' : d.queue.length ? `Queue: ${PLAYER_BY_ID.get(d.queue[0])?.name ?? ''} is up first` : 'Tap Draft on any player'}
+            <Text style={s.upTitle}>You're up.</Text>
+            <Text style={s.bannerSub} numberOfLines={2}>
+              {auto
+                ? "Autopilot's picking for you."
+                : d.queue.length
+                  ? `Queue says ${PLAYER_BY_ID.get(d.queue[0])?.name ?? 'go'}. Your call.`
+                  : `${clockWords}. Make it count.`}
             </Text>
           </View>
+          <Countdown endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} mine />
         </View>
       ) : (
         <View style={s.banner}>
           <View style={{ flex: 1 }}>
             <Text style={s.bannerTitle} numberOfLines={1}>
-              {clock?.name ?? '—'} is picking
+              {clock ? `${clock.name} is on the clock` : 'Waiting on the room'}
             </Text>
-            <Text style={s.bannerSub}>
-              {untilTurn === null ? 'No picks left for you' : untilTurn === 1 ? "You're up next" : `Your pick in ${untilTurn}`}
+            <Text style={s.bannerSub} numberOfLines={1}>
+              {banter
+                ? `${banter.name}: “${banter.line}”`
+                : untilTurn === null
+                  ? "Roster's full. Sit back."
+                  : untilTurn === 1
+                    ? "You're next. Get ready."
+                    : `${untilTurn} picks till you`}
             </Text>
           </View>
           {untilTurn !== null ? (
-            <View style={s.untilBadge}>
+            <View style={s.untilBadge} accessibilityLabel={untilTurn === 1 ? "You're next" : `${untilTurn} picks till you`}>
               <Text style={s.untilNum}>{untilTurn}</Text>
-              <Text style={s.untilLabel}>picks away</Text>
+              <Text style={s.untilLabel}>{untilTurn === 1 ? 'pick away' : 'picks away'}</Text>
             </View>
           ) : null}
         </View>
       )}
 
-      {d.autopilot ? (
-        <View style={[s.autopilot]} testID="autopilot-banner">
-          <Text style={s.autopilotText}>Autopilot on — you missed {d.missed} picks in a row, so we're drafting for you.</Text>
-          <Button small variant="secondary" label="Turn off" onPress={() => setAutodraft(d.id, false)} />
+      {d.autopilot && !complete ? (
+        <View style={s.autopilot} testID="autopilot-banner">
+          <Alert color={c.warning} size={16} />
+          <Text style={s.autopilotText}>{d.missed} missed in a row. Autopilot's got it, queue first.</Text>
+          <Button small variant="secondary" label="Take it back" onPress={() => setAutodraft(d.id, false)} />
         </View>
       ) : null}
 
-      {!complete ? (
-        <View style={s.controls}>
-          <Toggle label="Autodraft" on={d.autodraft} onPress={() => setAutodraft(d.id, !d.autodraft)} testID="autodraft-toggle" />
-          <Toggle label="Fast bots" on={botSpeed === 'fast'} onPress={() => setBotSpeed(botSpeed === 'fast' ? 'normal' : 'fast')} />
+      {complete && !showBoard ? null : <PickStrip state={state} players={PLAYER_BY_ID} />}
+
+      {complete ? null : (
+        <View style={{ paddingHorizontal: 12 }}>
+          <Segmented<Tab>
+            value={tab}
+            onChange={setTab}
+            options={[
+              { key: 'players', label: 'Players' },
+              { key: 'queue', label: 'Queue', badge: d.queue.length },
+              { key: 'team', label: 'My team' },
+              { key: 'board', label: 'Board' },
+            ]}
+          />
         </View>
-      ) : null}
+      )}
 
-      <PickStrip state={state} players={PLAYER_BY_ID} />
-
-      <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
-        <Segmented<Tab>
-          value={tab}
-          onChange={setTab}
-          options={[
-            { key: 'players', label: 'Players' },
-            { key: 'queue', label: 'Queue', badge: d.queue.length },
-            { key: 'team', label: 'My Team' },
-            { key: 'board', label: 'Board' },
-          ]}
-        />
-      </View>
-
-      {error ? (
-        <Pressable onPress={() => setError(null)} style={s.error}>
-          <Text style={{ color: c.danger, fontWeight: '700' }}>{error}</Text>
+      {error && !complete ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`${error} Dismiss`} onPress={() => setError(null)} style={s.error}>
+          <Alert color={c.danger} size={16} />
+          <Text style={s.errorText}>{error}</Text>
         </Pressable>
       ) : null}
 
       <View style={s.flex}>
-        {tab === 'players' ? (
+        {complete ? (
+          showBoard ? (
+            <View style={s.flex}>
+              <BoardGrid state={state} players={PLAYER_BY_ID} />
+              <View style={s.boardFooter}>
+                <Button label="Play the season" onPress={() => router.replace(`/results/${d.id}`)} testID="view-results" />
+              </View>
+            </View>
+          ) : (
+            <CoilReveal
+              state={state}
+              players={PLAYER_BY_ID}
+              onPlay={() => router.replace(`/results/${d.id}`)}
+              onBoard={() => setShowBoard(true)}
+              springback={{ amount: d.springback ?? 0, paid: springbackPaid }}
+              onSpringback={() => router.push('/springback')}
+            />
+          )
+        ) : tab === 'players' ? (
           <View style={s.flex}>
             <View style={s.filters}>
               <TextInput
                 value={q}
                 onChangeText={setQ}
-                placeholder="Search players or team"
+                placeholder="Search"
                 placeholderTextColor={c.textMuted}
                 style={s.search}
                 autoCorrect={false}
                 autoCapitalize="none"
                 clearButtonMode="while-editing"
               />
-              <Pressable
+              {(['All', 'QB', 'RB', 'WR', 'TE'] as PosFilter[]).map((p) => (
+                <Tap
+                  key={p}
+                  accessibilityRole="button"
+                  accessibilityLabel={p === 'All' ? 'All positions' : p}
+                  accessibilityState={{ selected: pos === p }}
+                  onPress={() => {
+                    if (pos !== p) feel.select();
+                    setPos(p);
+                  }}
+                  style={[s.posBtn, pos === p && { backgroundColor: (p === 'All' ? c.text : c[p]) + '22' }]}
+                >
+                  <Text style={[s.posText, pos === p && { color: p === 'All' ? c.text : c[p] }]}>{p}</Text>
+                </Tap>
+              ))}
+              <Tap
                 accessibilityRole="button"
                 accessibilityLabel={`Sort by ${sort === 'adp' ? 'projection' : 'ADP'}`}
-                onPress={() => setSort(sort === 'adp' ? 'proj' : 'adp')}
+                onPress={() => {
+                  feel.select();
+                  setSort(sort === 'adp' ? 'proj' : 'adp');
+                }}
                 style={s.sortBtn}
               >
-                <Text style={s.sortLabel}>SORT</Text>
                 <Text style={s.sortValue}>{sort === 'adp' ? 'ADP' : 'Proj'}</Text>
-              </Pressable>
-            </View>
-            <View style={s.chips}>
-              {(['All', 'QB', 'RB', 'WR', 'TE'] as PosFilter[]).map((p) => (
-                <Chip key={p} label={p} active={pos === p} color={p === 'All' ? undefined : c[p]} onPress={() => setPos(p)} />
-              ))}
+              </Tap>
             </View>
             <FlatList
               data={available}
@@ -276,7 +365,7 @@ function Room({ d }: { d: DraftEntry }) {
               initialNumToRender={14}
               windowSize={7}
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<Empty title="No players match" body="Try a different search or position." />}
+              ListEmptyComponent={<Empty title="Nobody by that name left." body="They may already be drafted." />}
             />
           </View>
         ) : tab === 'queue' ? (
@@ -287,11 +376,56 @@ function Room({ d }: { d: DraftEntry }) {
           <BoardGrid state={state} players={PLAYER_BY_ID} />
         )}
       </View>
+
+      <Modal visible={menu} transparent animationType={reduced ? 'none' : 'fade'} onRequestClose={() => setMenu(false)}>
+        <Pressable style={s.scrim} onPress={() => setMenu(false)} accessibilityLabel="Close settings" />
+        <View style={s.sheet} testID="draft-sheet">
+          <Text style={s.sheetTitle}>This draft</Text>
+          <Toggle
+            label="Autopilot"
+            hint="Drafts for you. Queue first, then your rankings."
+            on={d.autodraft}
+            onPress={() => setAutodraft(d.id, !d.autodraft)}
+            testID="autodraft-toggle"
+          />
+          <Toggle
+            label="Speed up the bots"
+            hint="They pick in a blink."
+            on={botSpeed === 'fast'}
+            onPress={() => setBotSpeed(botSpeed === 'fast' ? 'normal' : 'fast')}
+            testID="fast-bots-toggle"
+          />
+          <Tap
+            accessibilityRole="button"
+            onPress={() => {
+              setMenu(false);
+              router.push(`/rankings?type=${draftTypeFor(d)}`);
+            }}
+            style={s.sheetLink}
+            testID="sheet-rankings"
+            scaleTo={0.99}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={s.sheetLinkLabel}>Your rankings</Text>
+              <Text style={s.sheetLinkHint}>Autopick uses these after your queue.</Text>
+            </View>
+            <ChevronRight color={c.textMuted} size={18} />
+          </Tap>
+          <Button variant="secondary" label="Done" onPress={() => setMenu(false)} icon={<Check color={c.text} size={18} />} testID="sheet-done" />
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function Toggle({ label, on, onPress, testID }: { label: string; on: boolean; onPress: () => void; testID?: string }) {
+function clockInWords(sec: number) {
+  if (sec < 60) return `${sec} seconds`;
+  if (sec < 3600) return `${Math.round(sec / 60)} minutes`;
+  const h = Math.round(sec / 3600);
+  return `${h} ${h === 1 ? 'hour' : 'hours'}`;
+}
+
+function Toggle({ label, hint, on, onPress, testID }: { label: string; hint?: string; on: boolean; onPress: () => void; testID?: string }) {
   const s = useStyles();
   const c = useColors();
   return (
@@ -303,72 +437,62 @@ function Toggle({ label, on, onPress, testID }: { label: string; on: boolean; on
       onPress={onPress}
       style={s.toggle}
     >
-      <View style={[s.track, { backgroundColor: on ? c.primary : c.surfaceAlt }]}>
-        <View style={[s.knob, { alignSelf: on ? 'flex-end' : 'flex-start' }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.toggleLabel}>{label}</Text>
+        {hint ? <Text style={s.toggleHint}>{hint}</Text> : null}
       </View>
-      <Text style={[s.toggleLabel, on && { color: c.text }]}>{label}</Text>
+      <View style={[s.track, { backgroundColor: on ? c.accent : c.border }]}>
+        <View style={[s.knob, { alignSelf: on ? 'flex-end' : 'flex-start', backgroundColor: on ? c.bg : c.text }]} />
+      </View>
     </Pressable>
   );
 }
 
 const useStyles = makeStyles((c) => ({
   flex: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 16, paddingLeft: 4, paddingVertical: 6 },
-  back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  backText: { color: c.text, fontSize: 32, lineHeight: 34, fontWeight: '300' },
-  contestName: { color: c.text, fontSize: 16, fontWeight: '800' },
-  sub: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4, paddingVertical: 4 },
+  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  contestName: { ...type.title, color: c.text },
+  sub: { ...type.micro, fontSize: 12, color: c.textMuted },
+  autoChip: { paddingHorizontal: 10, height: 26, borderRadius: 13, justifyContent: 'center', backgroundColor: c.warning + '22' },
+  autoChipText: { ...type.label, color: c.warning },
   banner: {
     marginHorizontal: 12,
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    minHeight: 60,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
   },
-  bannerTitle: { color: c.text, fontSize: 17, fontWeight: '900' },
-  bannerSub: { color: c.textMuted, fontSize: 12, fontWeight: '600', marginTop: 2 },
+  upTitle: { fontFamily: fonts.displayHeavy, fontSize: 30, lineHeight: 32, color: c.accent },
+  bannerTitle: { ...type.title, color: c.text },
+  bannerSub: { ...type.small, color: c.textMuted, marginTop: 1 },
   untilBadge: { alignItems: 'center', minWidth: 56 },
-  untilNum: { color: c.accent, fontSize: 24, fontWeight: '900' },
-  untilLabel: { color: c.textMuted, fontSize: 10, fontWeight: '700' },
-  autopilot: {
-    marginHorizontal: 12,
-    marginTop: 8,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: c.warning + '22',
-    borderWidth: 1,
-    borderColor: c.warning,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  autopilotText: { color: c.warning, flex: 1, fontSize: 12, fontWeight: '700' },
-  controls: { flexDirection: 'row', gap: 16, paddingHorizontal: 12, paddingTop: 4 },
-  toggle: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  track: { width: 40, height: 24, borderRadius: 12, padding: 3, justifyContent: 'center' },
-  knob: { width: 18, height: 18, borderRadius: 9, backgroundColor: c.text },
-  toggleLabel: { color: c.textMuted, fontWeight: '700', fontSize: 13 },
-  error: { marginHorizontal: 12, marginBottom: 6, padding: 10, borderRadius: 10, backgroundColor: c.danger + '1F' },
-  filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 12 },
-  search: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-    color: c.text,
-    paddingHorizontal: 12,
-    fontSize: 15,
-  },
-  sortBtn: { width: 64, height: 44, borderRadius: 12, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
-  sortLabel: { color: c.textMuted, fontSize: 9, fontWeight: '800' },
-  sortValue: { color: c.text, fontSize: 13, fontWeight: '800' },
-  chips: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
+  untilNum: { fontFamily: fonts.display, fontSize: 32, lineHeight: 32, color: c.primary },
+  untilLabel: { ...type.micro, fontSize: 10, lineHeight: 12, color: c.textMuted },
+  autopilot: { marginHorizontal: 12, marginTop: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: c.warning + '1A', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  autopilotText: { ...type.smallStrong, color: c.warning, flex: 1 },
+  error: { marginHorizontal: 12, marginTop: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: c.danger + '1F', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  errorText: { ...type.smallStrong, color: c.danger, flex: 1 },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border + '99' },
+  search: { flex: 1, minWidth: 0, height: 40, borderRadius: 20, backgroundColor: c.surface, color: c.text, paddingHorizontal: 14, fontSize: 14, fontFamily: fonts.body, marginRight: 4 },
+  posBtn: { minWidth: 36, height: 40, borderRadius: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  posText: { ...type.label, fontSize: 12, color: c.textMuted },
+  sortBtn: { height: 40, borderRadius: 20, paddingHorizontal: 12, marginLeft: 4, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+  sortValue: { fontFamily: fonts.mono, fontSize: 12, color: c.text },
+  boardFooter: { padding: 16, borderTopWidth: 1, borderTopColor: c.border },
+  scrim: { flex: 1, backgroundColor: '#000000AA' },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32, gap: 8 },
+  sheetLink: { flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 10 },
+  sheetLinkLabel: { ...type.bodyStrong, color: c.text },
+  sheetLinkHint: { ...type.small, color: c.textMuted },
+  sheetTitle: { ...type.display24, color: c.text, marginBottom: 4 },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60 },
+  toggleLabel: { ...type.bodyStrong, color: c.text },
+  toggleHint: { ...type.small, color: c.textMuted },
+  track: { width: 44, height: 26, borderRadius: 13, padding: 3, justifyContent: 'center' },
+  knob: { width: 20, height: 20, borderRadius: 10 },
 }));

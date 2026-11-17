@@ -43,6 +43,16 @@ describe('contests', () => {
     expect(new Set(CONTESTS.map((c) => c.id)).size).toBe(CONTESTS.length);
     for (const c of CONTESTS) expect(c.filled).toBeLessThanOrEqual(c.maxEntries);
   });
+
+  it('publishes a rake that matches the prize pool', () => {
+    for (const c of CONTESTS) {
+      expect(c.rakePct).toBeGreaterThanOrEqual(8);
+      expect(c.rakePct).toBeLessThanOrEqual(15);
+      // What Coil keeps when the contest fills, as a share of fees: within a tenth of a point of the published rake.
+      const implied = (1 - c.prizePool / (c.entryFee * c.maxEntries)) * 100;
+      expect(Math.abs(implied - c.rakePct)).toBeLessThan(0.1);
+    }
+  });
 });
 
 describe('simulateSeason', () => {
