@@ -391,3 +391,24 @@ function readableInk(hex: string) {
   const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
   return lum > 0.6 ? '#0B0B14' : '#FFFFFF';
 }
+
+const STICKER_TILT = [-5, 3, -3, 5];
+
+/**
+ * Sticker: one loud label per screen. Filled, outlined, tilted by a fixed
+ * angle from its index (so it looks placed by hand and never jitters), with a
+ * hard offset shadow and no blur.
+ */
+export function Sticker({ label, index = 0, color, style }: { label: string; index?: number; color?: string; style?: StyleProp<ViewStyle> }) {
+  const c = useColors();
+  const tilt = STICKER_TILT[index % STICKER_TILT.length];
+  const face: ViewStyle = { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 7, borderWidth: 2, borderColor: c.text };
+  return (
+    <View style={[{ transform: [{ rotate: `${tilt}deg` }] }, style]} pointerEvents="none">
+      <View style={[face, { position: 'absolute', left: 2, top: 2, right: -2, bottom: -2, backgroundColor: '#00000066', borderColor: 'transparent' }]} />
+      <View style={[face, { backgroundColor: color ?? c.accent }]}>
+        <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 15, lineHeight: 17, color: c.bg, letterSpacing: 0.4 }}>{label}</Text>
+      </View>
+    </View>
+  );
+}

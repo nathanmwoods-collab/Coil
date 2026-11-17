@@ -6,7 +6,7 @@ import { ContestCard } from '../../components/ContestCard';
 import { PromoRail } from '../../components/PromoRail';
 import { SpringGlyph } from '../../components/SpringGauge';
 import { Button, Chip, clockLabel, clockSpeed, formatMoney, Screen, Tap } from '../../components/ui';
-import { CONTESTS, contestsFor, DEFAULT_SPORT, SPORTS, type SportInfo } from '../../data';
+import { CONTESTS, contestsFor, DEFAULT_SPORT, isSitAndGo, SPORTS, type SportInfo } from '../../data';
 import { gaugeFor, springLoad, type Contest } from '../../engine';
 import { useApp } from '../../store/useApp';
 import { BRANDS } from '../../theme/brands';
@@ -40,15 +40,23 @@ export default function Lobby() {
   const { featured, rest } = useMemo(() => {
     const sorted = [...contestsFor(sport)].sort((a, b) => b.prizePool - a.prizePool);
     const flagship = sorted.find((x) => x.tag === 'flagship') ?? sorted[0];
-    const others = sorted.filter((x) => x !== flagship && (filter === 'All' || clockSpeed(x.pickClockSec) === filter));
+    // Timed pods first, then the sit-and-go rooms as one block of rows.
+    const others = sorted
+      .filter((x) => x !== flagship && (filter === 'All' || clockSpeed(x.pickClockSec) === filter))
+      .sort((a, b) => Number(isSitAndGo(a)) - Number(isSitAndGo(b)));
     return { featured: flagship, rest: others };
   }, [filter, sport]);
 
   const open = useCallback((id: string) => router.push(`/contest/${id}`), []);
 
   const renderItem = useCallback(
-    ({ item }: { item: Contest }) => <ContestCard contest={item} myEntries={entries[item.id] ?? 0} onPress={() => open(item.id)} />,
-    [entries, open],
+    ({ item, index }: { item: Contest; index: number }) => (
+      <>
+        {isSitAndGo(item) && (index === 0 || !isSitAndGo(rest[index - 1])) ? <Text style={s.rooms}>Filling now</Text> : null}
+        <ContestCard contest={item} myEntries={entries[item.id] ?? 0} onPress={() => open(item.id)} />
+      </>
+    ),
+    [entries, open, rest, s.rooms],
   );
 
   const isCoil = brand.name === BRANDS.coil.name;
@@ -139,7 +147,7 @@ export default function Lobby() {
   );
 }
 
-const Sep = () => <View style={{ height: 10 }} />;
+const Sep = ({ leadingItem }: { leadingItem?: Contest }) => <View style={{ height: leadingItem && isSitAndGo(leadingItem) ? 0 : 10 }} />;
 
 const useStyles = makeStyles((c) => ({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
@@ -162,5 +170,6 @@ const useStyles = makeStyles((c) => ({
   list: { padding: 16, paddingTop: 8, paddingBottom: 32 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   section: { ...type.display24, color: c.text },
+  rooms: { ...type.title, color: c.text, marginTop: 10, marginBottom: 2 },
   footer: { ...type.micro, color: c.textMuted, textAlign: 'center', marginTop: 24 },
 }));
