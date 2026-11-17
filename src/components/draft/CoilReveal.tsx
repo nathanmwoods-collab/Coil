@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, ScrollView, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
 import { rosterOf, type DraftState, type Player } from '../../engine';
 import { teamIdentity } from '../../store/results';
@@ -9,7 +9,8 @@ import { motion, NATIVE_DRIVER, useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 import { SpringGlyph } from '../SpringGauge';
-import { Button, formatCents, shortName, Tap } from '../ui';
+import { Rattler } from '../Rattler';
+import { Button, formatCents, shortName, Sticker, Tap } from '../ui';
 
 const COLS = 6;
 const ROW_H = 62;
@@ -127,11 +128,11 @@ export const CoilReveal = memo(function CoilReveal({
         {geo ? (
           <>
             <Svg width={w} height={geo.height} style={{ position: 'absolute' }}>
-              <Path d={geo.d} stroke={c.border} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <Path d={geo.d} stroke={c.border} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
               <Path
                 d={geo.d}
                 stroke={c.primary}
-                strokeWidth={3}
+                strokeWidth={8}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 fill="none"
@@ -142,8 +143,20 @@ export const CoilReveal = memo(function CoilReveal({
                   <Circle key={i} cx={p.x} cy={p.y} r={5} fill={c[picks[i].player.position]} stroke={c.bg} strokeWidth={2} />
                 ) : null,
               )}
-              {t >= 1 && last ? <Circle cx={last.x} cy={last.y} r={7} fill={c.accent} stroke={c.bg} strokeWidth={2} /> : null}
+              {geo.nodes[0] ? (
+                // The rattle at pick 1: the path is the logo, made of your team.
+                <G transform={`translate(${geo.nodes[0].x - 12} ${geo.nodes[0].y}) rotate(-150)`}>
+                  <Rect x={2} y={-5} width={9} height={10} rx={4} fill={c.primary} />
+                  <Rect x={11} y={-4.5} width={8} height={9} rx={3.5} fill={c.primary} />
+                  <Rect x={19} y={-4} width={7} height={8} rx={3} fill={c.primary} />
+                </G>
+              ) : null}
             </Svg>
+            {t >= 1 && last ? (
+              <View style={{ position: 'absolute', left: last.x - 24, top: last.y - 30 }} testID="reveal-clutch">
+                <Rattler pose="smug" size={48} />
+              </View>
+            ) : null}
             {geo.nodes.map((p, i) => (
               <Text
                 key={i}
@@ -161,7 +174,7 @@ export const CoilReveal = memo(function CoilReveal({
         style={[s.card, { opacity: card, transform: [{ translateY: card.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}
       >
         <Text style={s.kicker}>Your build</Text>
-        <Text style={s.build}>{id.build}</Text>
+        <Sticker label={id.build} index={1} size={30} style={{ alignSelf: 'flex-start', marginVertical: 8 }} />
         <Text style={s.counts}>
           QB {id.counts.QB} · RB {id.counts.RB} · WR {id.counts.WR} · TE {id.counts.TE}
         </Text>

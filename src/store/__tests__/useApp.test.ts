@@ -12,7 +12,7 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 });
 
 import { moveRankToTop, onTheClock, toggleExcluded } from '../../engine';
-import { exposureFor } from '../results';
+import { draftResult, exposureFor, verdictFor } from '../results';
 import { PLAYERS } from '../../data';
 import { liveAdp, ME, MISSES_FOR_AUTOPILOT, rankingsFor, slateFor, spendable, springbackPending, STARTING_BALANCE, teamName, useApp, type DraftEntry } from '../useApp';
 
@@ -365,5 +365,27 @@ describe('You: notifications and drafter badge', () => {
     expect(get().badge.color).toBe('#FF6B9A');
     get().setBadge({ tag: '  ' });
     expect(get().badge.tag).toBe('ME');
+  });
+});
+
+describe('results verdict', () => {
+  it('matches the finish it describes', () => {
+    const r = get().enterContest('c_two_minute_drill', { count: 4, autodraft: true });
+    if (!r.ok) throw new Error(r.error);
+    let t = Date.now();
+    for (let i = 0; i < 80 && r.draftIds.some((id) => draft(id).state.status !== 'complete'); i++) get().tick((t += 200));
+    for (const id of r.draftIds) {
+      const d = draft(id);
+      const { myRank, myTotal, standings } = draftResult(d);
+      const v = verdictFor(d);
+      if (myRank === 1) expect(v).toBe("Pod's yours.");
+      else if (myRank === 2) expect(v).toMatch(/^Second\./);
+      else if (myRank === d.state.config.teams) expect(v).toBe('Dead last. Somebody had to.');
+      else {
+        const m = v.match(/^(\d+) points short\. Blame round (\d+)\.$/);
+        if (m) expect(+m[1]).toBe(Math.round(standings.find((x) => x.rank === 2)!.total - myTotal));
+        else expect(v).toBe('Outdrafted. It happens.');
+      }
+    }
   });
 });

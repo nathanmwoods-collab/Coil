@@ -4,9 +4,10 @@ import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { ChevronLeft } from '../../components/icons';
 import { PlayerAvatar } from '../../components/PlayerAvatar';
-import { Button, Empty, formatPts, ordinal, PosPill, Screen, Segmented, Tap, WindingUp } from '../../components/ui';
+import { Rattler } from '../../components/Rattler';
+import { Button, Empty, formatPts, ordinal, PosPill, PtsText, RankText, Screen, Segmented, Tap, WindingUp } from '../../components/ui';
 import { feel } from '../../lib/feel';
-import { draftResult, PLAYER_BY_ID, seasonFor } from '../../store/results';
+import { draftResult, PLAYER_BY_ID, seasonFor, verdictFor } from '../../store/results';
 import { contestById, ME, useApp } from '../../store/useApp';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
@@ -64,16 +65,24 @@ export default function Results() {
       </View>
       <View style={s.hero}>
         <View style={{ flex: 1 }}>
-          <Text style={[s.big, { color: r.myRank === 1 ? c.accent : c.primary }]}>{ordinal(r.myRank)}</Text>
-          <Text style={s.label}>Finished, of {d.state.config.teams}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <RankText rank={r.myRank} color={r.myRank <= 2 ? c.accent : r.myRank === d.state.config.teams ? c.textMuted : c.primary} />
+            {r.myRank <= 2 ? (
+              <Rattler pose="smug" variant="sticker" size={44} testID="clutch-smug" />
+            ) : r.myRank === d.state.config.teams ? (
+              <Rattler pose="bust" size={40} />
+            ) : null}
+          </View>
+          <Text style={s.label}>of {d.state.config.teams} in your pod</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={s.big}>{formatPts(r.myTotal)}</Text>
+          <PtsText value={r.myTotal} size={40} color={c.text} />
           <Text style={s.label}>
             Ceiling: W{ceiling + 1} · {formatPts(best)}
           </Text>
         </View>
       </View>
+      <Text style={s.verdict} testID="results-verdict">{verdictFor(d)}</Text>
       <Text style={s.simNote}>Simulated season. Results are illustrative.</Text>
       <View style={{ paddingHorizontal: 12 }}>
         <Segmented<Tab>
@@ -190,6 +199,7 @@ const useStyles = makeStyles((c) => ({
   title: { ...type.title, color: c.text, flex: 1 },
   hero: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 8 },
   label: { ...type.small, color: c.textMuted },
+  verdict: { ...type.display24, color: c.text, paddingHorizontal: 20, paddingTop: 10 },
   big: { fontFamily: fonts.displayHeavy, fontSize: 56, lineHeight: 58, color: c.text },
   simNote: { ...type.micro, color: c.textMuted, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 4 },
   weeks: { paddingHorizontal: 12, paddingVertical: 8, gap: 6, alignItems: 'center' },

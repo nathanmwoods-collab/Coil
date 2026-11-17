@@ -407,7 +407,7 @@ const STICKER_TILT = [-5, 3, -3, 5];
  * angle from its index (so it looks placed by hand and never jitters), with a
  * hard offset shadow and no blur.
  */
-export function Sticker({ label, index = 0, color, style }: { label: string; index?: number; color?: string; style?: StyleProp<ViewStyle> }) {
+export function Sticker({ label, index = 0, color, style, size = 15 }: { label: string; index?: number; color?: string; style?: StyleProp<ViewStyle>; size?: number }) {
   const c = useColors();
   const tilt = STICKER_TILT[index % STICKER_TILT.length];
   const face: ViewStyle = { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 7, borderWidth: 2, borderColor: c.text };
@@ -415,8 +415,33 @@ export function Sticker({ label, index = 0, color, style }: { label: string; ind
     <View style={[{ transform: [{ rotate: `${tilt}deg` }] }, style]} pointerEvents="none">
       <View style={[face, { position: 'absolute', left: 2, top: 2, right: -2, bottom: -2, backgroundColor: '#00000066', borderColor: 'transparent' }]} />
       <View style={[face, { backgroundColor: color ?? c.accent }]}>
-        <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 15, lineHeight: 17, color: c.bg, letterSpacing: 0.4 }}>{label}</Text>
+        <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size, lineHeight: size * 1.15, color: c.bg, letterSpacing: 0.4 }}>{label}</Text>
       </View>
     </View>
+  );
+}
+
+/** "1st" as a scoreboard prints it: the numeral big, the suffix small and raised. */
+export function RankText({ rank, size = 56, color }: { rank: number; size?: number; color: string }) {
+  const word = ordinal(rank);
+  const num = String(rank);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }} accessibilityLabel={word}>
+      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size, lineHeight: size * 1.04, color }}>{num}</Text>
+      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size * 0.45, lineHeight: size * 0.5, color, marginTop: size * 0.1, marginLeft: 2, textDecorationLine: 'underline' }}>
+        {word.slice(num.length)}
+      </Text>
+    </View>
+  );
+}
+
+/** Points with the decimal small and quiet: "2367" then ".7". */
+export function PtsText({ value, size = 40, color }: { value: number; size?: number; color: string }) {
+  const [int, dec] = formatPts(value).split('.');
+  return (
+    <Text style={{ fontFamily: fonts.displayHeavy, fontSize: size, lineHeight: size * 1.04, color }} accessibilityLabel={`${formatPts(value)} points`}>
+      {int}
+      <Text style={{ fontSize: size * 0.55, opacity: 0.6 }}>.{dec}</Text>
+    </Text>
   );
 }

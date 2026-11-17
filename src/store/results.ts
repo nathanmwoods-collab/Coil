@@ -88,6 +88,33 @@ export function seasonFor(seed: number) {
   return s;
 }
 
+/**
+ * One line on how the pod went, from the result itself (round-2 copy rows 15-18).
+ * Middle ranks name the round whose pick scored furthest below that round's
+ * pod average, the "blame round", when one stands out.
+ */
+export function verdictFor(d: DraftEntry): string {
+  const r = draftResult(d);
+  const teams = d.state.config.teams;
+  if (r.myRank === 1) return "Pod's yours.";
+  if (r.myRank === 2) return 'Second. Close enough to taste it.';
+  if (r.myRank === teams) return 'Dead last. Somebody had to.';
+  const season = seasonFor(d.seed);
+  const total = (pid: string) => season.reduce((n, w) => n + (w[pid] ?? 0), 0);
+  let worst: { round: number; by: number } | null = null;
+  for (let round = 1; round <= d.state.config.rounds; round++) {
+    const picks = d.state.picks.filter((p) => p.round === round);
+    const mine = picks.find((p) => p.entrantId === ME);
+    if (!mine || picks.length < 2) continue;
+    const avg = picks.reduce((n, p) => n + total(p.playerId), 0) / picks.length;
+    const by = avg - total(mine.playerId);
+    if (!worst || by > worst.by) worst = { round, by };
+  }
+  const second = r.standings.find((x) => x.rank === 2);
+  const short = second ? Math.max(0, second.total - r.myTotal) : 0;
+  return worst && worst.by > 20 && short > 0 ? `${Math.round(short)} points short. Blame round ${worst.round}.` : 'Outdrafted. It happens.';
+}
+
 export interface ExposureWithDollars extends ExposureRow {
   dollars: number;
 }
