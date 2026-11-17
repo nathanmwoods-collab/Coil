@@ -307,7 +307,8 @@ function Room({ d }: { d: DraftEntry }) {
             <View style={s.flex}>
               <BoardGrid state={state} players={PLAYER_BY_ID} />
               <View style={s.boardFooter}>
-                <Button label="Play the season" onPress={() => router.replace(`/results/${d.id}`)} testID="view-results" />
+                <Button label="Draft again" onPress={() => router.replace(`/contest/${d.contestId}`)} testID="draft-again" />
+                <Button variant="ghost" label="Play the season" onPress={() => router.replace(`/results/${d.id}`)} testID="view-results" />
               </View>
             </View>
           ) : (
@@ -316,6 +317,7 @@ function Room({ d }: { d: DraftEntry }) {
               players={PLAYER_BY_ID}
               onPlay={() => router.replace(`/results/${d.id}`)}
               onBoard={() => setShowBoard(true)}
+              onDraftAgain={() => router.replace(`/contest/${d.contestId}`)}
               springback={{ amount: d.springback ?? 0, paid: springbackPaid }}
               onSpringback={() => router.push('/springback')}
             />
@@ -497,7 +499,7 @@ const useStyles = makeStyles((c) => ({
   posText: { ...type.label, fontSize: 12, color: c.textMuted },
   sortBtn: { height: 40, borderRadius: 20, paddingHorizontal: 12, marginLeft: 4, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
   sortValue: { fontFamily: fonts.mono, fontSize: 12, color: c.text },
-  boardFooter: { padding: 16, borderTopWidth: 1, borderTopColor: c.border },
+  boardFooter: { padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: c.border },
   scrim: { flex: 1, backgroundColor: '#000000AA' },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32, gap: 8 },
   sheetLink: { flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 10 },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { archetype, formatTeamName, MAX_TEAM_NAME, primaryStack, stackLabel, surname, teamStructure, type NameContext, type StackPlayer } from '../naming';
+import { archetype, buildProfile, formatTeamName, MAX_TEAM_NAME, primaryStack, stackLabel, surname, teamStructure, type NameContext, type StackPlayer } from '../naming';
 import type { Position } from '../types';
 
 const pl = (name: string, team: string, position: Position, adp: number): StackPlayer => ({ name, team, position, adp });
@@ -70,5 +70,82 @@ describe('team naming', () => {
     const long = formatTeamName(['contest', 'structure', 'stack', 'archetype', 'date', 'slot', 'counter'], ctx);
     expect(long.length).toBeLessThanOrEqual(MAX_TEAM_NAME);
     expect(long.endsWith('…')).toBe(true);
+  });
+});
+
+describe('build profile and quips', () => {
+  type P = { round: number; position: Position; name?: string };
+  /** A full 18-round roster from a position string, e.g. "WWRRR..." (Q/R/W/T). */
+  const roster = (spec: string, names: Record<number, string> = {}): P[] =>
+    [...spec].map((ch, i) => ({
+      round: i + 1,
+      position: ({ Q: 'QB', R: 'RB', W: 'WR', T: 'TE' } as const)[ch as 'Q' | 'R' | 'W' | 'T'],
+      ...(names[i + 1] ? { name: names[i + 1] } : {}),
+    }));
+
+  it('never says "backfield early" when the early picks were receivers (founder comment 11)', () => {
+    // Josh Downs (a WR) in round 2, backs in 3-5.
+    const team = roster('WWRRRWQTWRWRQWTRWR', { 2: 'Josh Downs' });
+    const p = buildProfile(team);
+    expect(p.primary).toBe('Robust RB');
+    expect(p.line).toBe('3 backs by round 5. Bought the backfield.');
+  });
+
+  it('labels each archetype', () => {
+    expect(buildProfile(roster('WWWWWWRQRTRWRWQRTW')).primary).toBe('Zero RB');
+    expect(buildProfile(roster('RWWWWWQWRTRWRWQRTW')).primary).toBe('Hero RB');
+    expect(buildProfile(roster('RRRWWWQWRTRWRWQRTW')).primary).toBe('Robust RB');
+    expect(buildProfile(roster('RRWWWWQWWTWWRWQWTW')).primary).toBe('Hyper-fragile RB');
+    expect(buildProfile(roster('RWRQWWWTRWRWRWQRTW')).primary).toBe('Elite QB');
+    expect(buildProfile(roster('RWTRWWWQRWRWRWQRTW')).primary).toBe('Elite TE');
+    expect(buildProfile(roster('RWRWWTWWRWQRRWQRWW')).primary).toBe('Late-round QB');
+    expect(buildProfile(roster('RWRWWWQWRWRWRTQRWT')).primary).toBe('Zero TE');
+    expect(buildProfile(roster('RWRWWQWTRWRWRTQRWW')).primary).toBe('Balanced');
+  });
+
+  it('WR Avalanche leads a two-back build', () => {
+    const p = buildProfile(roster('WWRWWRWQRTRWRWQRTW'));
+    expect(p.primary).toBe('WR Avalanche');
+    expect(p.line).toBe('5 receivers in the first 7 rounds. Let it rain.');
+  });
+
+  it('keeps every label that applies, primary first', () => {
+    const p = buildProfile(roster('WTWQWWWWRWRWRWQRTR'));
+    expect(p.tags[0]).toBe('Zero RB');
+    expect(p.tags).toEqual(expect.arrayContaining(['WR Avalanche', 'Elite QB', 'Elite TE']));
+  });
+
+  it('names the hero and the gap', () => {
+    const p = buildProfile(roster('WRWWWWQWWRTRWRQRTW', { 2: 'Bijan Robinson' }));
+    expect(p.line).toBe('Robinson in round 2, then no back till round 10.');
+  });
+
+  it('does not call a team mid-draft Zero TE or Late-round QB for picks not made yet', () => {
+    const p = buildProfile(roster('RWRWW'));
+    expect(p.tags).not.toContain('Zero TE');
+    expect(p.tags).not.toContain('Late-round QB');
+  });
+
+  it('every quip agrees with the roster it describes (random rosters)', () => {
+    let seed = 7;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    for (let n = 0; n < 500; n++) {
+      const spec = Array.from({ length: 18 }, () => 'QRRWWWT'[Math.floor(rand() * 7)]).join('');
+      const team = roster(spec);
+      const { primary, line } = buildProfile(team);
+      const firstRound = (pos: string) => team.find((p) => p.position === pos)?.round;
+      const rbsBy = (r: number) => team.filter((p) => p.position === 'RB' && p.round <= r).length;
+      // Lines only talk about running backs on running-back builds.
+      if (/\bbacks?\b|running back/.test(line)) expect(primary).toMatch(/RB|Balanced/);
+      let m: RegExpMatchArray | null;
+      if ((m = line.match(/^(\d+) backs by round (\d+)/))) expect(rbsBy(+m[2])).toBe(+m[1]);
+      if ((m = line.match(/No running back till round (\d+)/))) expect(firstRound('RB')).toBe(+m[1]);
+      if ((m = line.match(/First quarterback in round (\d+)/))) expect(firstRound('QB')).toBe(+m[1]);
+      if ((m = line.match(/First tight end in round (\d+)/))) expect(firstRound('TE')).toBe(+m[1]);
+      if ((m = line.match(/^(\d+) receivers in the first (\d+) rounds/)))
+        expect(team.filter((p) => p.position === 'WR' && p.round <= +m![2]).length).toBe(+m[1]);
+      if ((m = line.match(/^(\d+) backs early, (\d+) all season/)))
+        expect(team.filter((p) => p.position === 'RB').length).toBe(+m[2]);
+    }
   });
 });

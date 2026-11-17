@@ -26,6 +26,7 @@ export const CoilReveal = memo(function CoilReveal({
   players,
   onPlay,
   onBoard,
+  onDraftAgain,
   springback,
   onSpringback,
 }: {
@@ -33,6 +34,8 @@ export const CoilReveal = memo(function CoilReveal({
   players: Map<string, Player>;
   onPlay: () => void;
   onBoard: () => void;
+  /** Back to this contest's sheet to enter again. */
+  onDraftAgain: () => void;
   /** MOCK Springback this entry accrued, and whether its Wednesday has already paid. */
   springback?: { amount: number; paid: boolean };
   onSpringback?: () => void;
@@ -162,6 +165,7 @@ export const CoilReveal = memo(function CoilReveal({
         <Text style={s.counts}>
           QB {id.counts.QB} · RB {id.counts.RB} · WR {id.counts.WR} · TE {id.counts.TE}
         </Text>
+        {id.tags.length > 1 ? <Text style={s.tags}>Also {id.tags.slice(1).join(' · ')}</Text> : null}
         {id.stack ? <Text style={s.stack}>{id.stack} stack</Text> : null}
         <Text style={s.line}>{id.line}</Text>
       </Animated.View>
@@ -169,7 +173,7 @@ export const CoilReveal = memo(function CoilReveal({
       {springback && springback.amount > 0 ? (
         <Tap
           accessibilityRole="button"
-          accessibilityLabel={`${formatCents(springback.amount)} Springback ${springback.paid ? 'paid as credit' : 'pending, lands Wednesday'}. Mock. Open Springback.`}
+          accessibilityLabel={`You earned ${formatCents(springback.amount)} Springback. ${springback.paid ? 'Already landed as credit' : 'Lands Wednesday'}. Mock. Open Springback.`}
           onPress={onSpringback}
           scaleTo={0.99}
           style={s.spring}
@@ -177,15 +181,18 @@ export const CoilReveal = memo(function CoilReveal({
         >
           <SpringGlyph color={c.primary} size={18} />
           <Text style={s.springText}>
-            +{formatCents(springback.amount)} Springback {springback.paid ? 'paid.' : 'pending.'}
-            <Text style={s.springSub}>{springback.paid ? ' Landed as entry credit (mock).' : ' Lands Wednesday (mock).'}</Text>
+            You earned {formatCents(springback.amount)} Springback.
+            <Text style={s.springSub}>{springback.paid ? ' Already landed as entry credit (mock).' : ' Lands Wednesday (mock).'}</Text>
           </Text>
         </Tap>
       ) : null}
 
       <View style={{ gap: 10 }}>
-        <Button label="Play the season" onPress={onPlay} testID="view-results" />
-        <Button variant="ghost" label="See the full board" onPress={onBoard} testID="see-board" />
+        <Button label="Draft again" onPress={onDraftAgain} testID="draft-again" />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Button variant="secondary" label="Play the season" onPress={onPlay} testID="view-results" style={{ flex: 1 }} />
+          <Button variant="ghost" label="Full board" onPress={onBoard} testID="see-board" style={{ flex: 1 }} />
+        </View>
       </View>
     </ScrollView>
   );
@@ -203,6 +210,7 @@ const useStyles = makeStyles((c) => ({
   kicker: { ...type.label, color: c.primary },
   build: { fontFamily: fonts.displayHeavy, fontSize: 44, lineHeight: 46, color: c.text },
   counts: { fontFamily: fonts.mono, fontSize: 12, color: c.textMuted },
+  tags: { ...type.smallStrong, color: c.primary, marginTop: 4 },
   stack: { ...type.bodyStrong, color: c.text, marginTop: 8 },
   line: { ...type.body, color: c.textMuted, marginTop: 2 },
 }));

@@ -4,7 +4,21 @@
  */
 import type { Position } from './types';
 
-export type Archetype = 'Zero RB' | 'Hero RB' | 'Robust RB' | 'Balanced';
+export type Archetype =
+  | 'Zero RB'
+  | 'Hero RB'
+  | 'Robust RB'
+  | 'Hyper-fragile RB'
+  | 'WR Avalanche'
+  | 'Elite QB'
+  | 'Late-round QB'
+  | 'Elite TE'
+  | 'Zero TE'
+  | 'Balanced';
+
+export const ARCHETYPES: Archetype[] = [
+  'Zero RB', 'Hero RB', 'Robust RB', 'Hyper-fragile RB', 'WR Avalanche', 'Elite QB', 'Late-round QB', 'Elite TE', 'Zero TE', 'Balanced',
+];
 type Counts = Record<Position, number>;
 
 /** "3QB-6RB-7WR-2TE" */
@@ -17,14 +31,121 @@ export function earlyRounds(rounds = 18): number {
   return Math.max(2, Math.round(rounds / 3));
 }
 
+export interface BuildPick {
+  round: number;
+  position: Position;
+  /** Player name, for the one-liner. Optional so naming can run on bare positions. */
+  name?: string;
+}
+
+export interface BuildProfile {
+  /** The headline label. */
+  primary: Archetype;
+  /** Every label that applies, primary first. */
+  tags: Archetype[];
+  /** One wry line. Every fact in it is read off the roster. */
+  line: string;
+}
+
+/** Round thresholds are written for 18 rounds and scale with the draft. */
+const scale = (n: number, rounds: number, min = 1) => Math.max(min, Math.round((n * rounds) / 18));
+
 /**
- * Build name from where the running backs were taken:
- * none early = Zero RB, one = Hero RB, three or more = Robust RB, two = Balanced.
+ * Build labels from where each position was taken.
+ *
+ * Running-back axis (always one of these), by RBs in the early rounds
+ * (`earlyRounds`, 6 of 18): none = Zero RB, one = Hero RB, three or more =
+ * Robust RB, two = Balanced. A finished roster with two or more early backs
+ * and four or fewer in total is Hyper-fragile RB.
+ * Extra labels: WR Avalanche (5+ receivers in rounds 1-7), Elite QB (first QB
+ * by round 4), Late-round QB (first QB in round 10 or later, or none),
+ * Elite TE (first TE by round 3), Zero TE (first TE in round 12 or later, or none).
+ * "None" only counts once the roster is full: a team mid-draft is not Zero TE yet.
+ * The primary label is the running-back one unless that is Balanced, in which
+ * case the most distinctive extra label leads.
  */
-export function archetype(picks: { round: number; position: Position }[], rounds = 18): Archetype {
+export function buildProfile(picks: BuildPick[], rounds = 18): BuildProfile {
+  const sorted = [...picks].sort((a, b) => a.round - b.round);
+  const full = picks.length >= rounds;
+  const of = (pos: Position) => sorted.filter((p) => p.position === pos);
+  const first = (pos: Position) => of(pos)[0];
   const cut = earlyRounds(rounds);
-  const earlyRb = picks.filter((p) => p.round <= cut && p.position === 'RB').length;
-  return earlyRb === 0 ? 'Zero RB' : earlyRb === 1 ? 'Hero RB' : earlyRb >= 3 ? 'Robust RB' : 'Balanced';
+  const rbs = of('RB');
+  const earlyRbs = rbs.filter((p) => p.round <= cut);
+
+  const rbAxis: Archetype =
+    earlyRbs.length === 0
+      ? 'Zero RB'
+      : earlyRbs.length === 1
+        ? 'Hero RB'
+        : full && rbs.length <= scale(4, rounds, 2)
+          ? 'Hyper-fragile RB'
+          : earlyRbs.length >= 3
+            ? 'Robust RB'
+            : 'Balanced';
+
+  const extras: Archetype[] = [];
+  const wrWindow = scale(7, rounds, 2);
+  const earlyWrs = of('WR').filter((p) => p.round <= wrWindow);
+  if (earlyWrs.length >= scale(5, rounds, 2)) extras.push('WR Avalanche');
+  const qb = first('QB');
+  if (qb && qb.round <= scale(4, rounds)) extras.push('Elite QB');
+  if ((qb && qb.round >= scale(10, rounds, 2)) || (!qb && full)) extras.push('Late-round QB');
+  const te = first('TE');
+  if (te && te.round <= scale(3, rounds)) extras.push('Elite TE');
+  if ((te && te.round >= scale(12, rounds, 2)) || (!te && full)) extras.push('Zero TE');
+
+  const primary: Archetype = rbAxis === 'Balanced' && extras.length ? extras[0] : rbAxis;
+  const tags = [primary, ...[rbAxis, ...extras].filter((t) => t !== primary && t !== 'Balanced')];
+
+  const who = (p: BuildPick | undefined, fallback: string) => (p?.name ? surname(p.name) : fallback);
+  let line: string;
+  switch (primary) {
+    case 'Zero RB':
+      line = rbs.length
+        ? `No running back till round ${rbs[0].round}. Let the room pay for them.`
+        : full
+          ? 'Not one running back. Truly zero.'
+          : 'No running backs yet. Holding the line.';
+      break;
+    case 'Hero RB': {
+      const hero = earlyRbs[0];
+      const next = rbs.find((p) => p !== hero);
+      line = next
+        ? `${who(hero, 'One back')} in round ${hero.round}, then no back till round ${next.round}.`
+        : `${who(hero, 'One back')} in round ${hero.round}, and he carries the backfield.`;
+      break;
+    }
+    case 'Robust RB':
+      line = `${earlyRbs.length} backs by round ${earlyRbs[earlyRbs.length - 1].round}. Bought the backfield.`;
+      break;
+    case 'Hyper-fragile RB':
+      line = `${earlyRbs.length} backs early, ${rbs.length} all season. No safety net.`;
+      break;
+    case 'WR Avalanche':
+      line = `${earlyWrs.length} receivers in the first ${wrWindow} rounds. Let it rain.`;
+      break;
+    case 'Elite QB':
+      line = `${who(qb, 'A quarterback')} in round ${qb!.round}. Paid up under center.`;
+      break;
+    case 'Late-round QB':
+      line = qb ? `First quarterback in round ${qb.round}. Patience.` : 'No quarterback at all. A choice.';
+      break;
+    case 'Elite TE':
+      line = `${who(te, 'A tight end')} in round ${te!.round}. The tight end edge.`;
+      break;
+    case 'Zero TE':
+      line = te ? `First tight end in round ${te.round}. Streaming it.` : 'No tight end at all. Bold.';
+      break;
+    default:
+      line = `Two backs by round ${earlyRbs[earlyRbs.length - 1]?.round ?? cut}, then took what came.`;
+  }
+  return { primary, tags, line };
+}
+
+/** The headline build label. See `buildProfile`. */
+export function archetype(picks: BuildPick[], rounds = 18): Archetype {
+  return buildProfile(picks, rounds).primary;
 }
 
 export interface StackPlayer {

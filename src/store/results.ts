@@ -1,6 +1,8 @@
 import { payoutTable, PLAYER_MAP, PLAYERS, SEASON_WEEKS, simulateSeason, simulateTournament } from '../data';
 import {
   archetype,
+  buildProfile,
+  type Archetype,
   exposure,
   primaryStack,
   type NameContext,
@@ -99,10 +101,12 @@ export function exposureFor(drafts: DraftEntry[]): ExposureWithDollars[] {
   return exposure(teams, PLAYER_BY_ID).map((r) => ({ ...r, dollars: dollars.get(r.player.id) ?? 0 }));
 }
 
-export type BuildName = 'Zero RB' | 'Hero RB' | 'Robust RB' | 'Balanced';
+export type BuildName = Archetype;
 
 export interface TeamIdentity {
   build: BuildName;
+  /** Every build label that applies, `build` first. */
+  tags: BuildName[];
   /** e.g. "Hurts + A.J. Brown", or null with no QB stack. */
   stack: string | null;
   counts: Record<'QB' | 'RB' | 'WR' | 'TE', number>;
@@ -124,8 +128,8 @@ export function teamIdentity(state: DraftEntry['state'], entrantId: string = ME)
   const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
   for (const x of picks) counts[x.player.position]++;
 
-  const build: BuildName = archetype(
-    picks.map((x) => ({ round: x.pick.round, position: x.player.position })),
+  const profile = buildProfile(
+    picks.map((x) => ({ round: x.pick.round, position: x.player.position, name: x.player.name })),
     state.config.rounds,
   );
 
@@ -143,22 +147,7 @@ export function teamIdentity(state: DraftEntry['state'], entrantId: string = ME)
     }
   }
 
-  const reaches = picks.filter((x) => x.pick.overall < x.player.adp - 12).length;
-  const values = picks.filter((x) => x.pick.overall > x.player.adp + 12).length;
-  const line =
-    reaches >= 4
-      ? 'Took your guys. ADP can deal with it.'
-      : values >= 4
-        ? 'Let the room hand you value all day.'
-        : build === 'Zero RB'
-          ? 'Let everyone else pay for running backs.'
-          : build === 'Robust RB'
-            ? 'Bought the whole backfield early. Bold.'
-            : build === 'Hero RB'
-              ? 'One anchor back, then all the swings.'
-              : 'Took the chalk early and the swings late.';
-
-  return { build, stack, counts, line };
+  return { build: profile.primary, tags: profile.tags, stack, counts, line: profile.line };
 }
 
 export interface LiveTeam {
