@@ -8,7 +8,7 @@ import { Breath } from '../../components/draft/Breath';
 import { ClockClutch } from '../../components/draft/ClockClutch';
 import { Rattler } from '../../components/Rattler';
 import { CoilReveal } from '../../components/draft/CoilReveal';
-import { Countdown } from '../../components/draft/Countdown';
+import { ClockCoil, Countdown } from '../../components/draft/Countdown';
 import { MyTeam } from '../../components/draft/MyTeam';
 import { PickStrip } from '../../components/draft/PickStrip';
 import { PlayerSheet } from '../../components/draft/PlayerSheet';
@@ -235,7 +235,7 @@ function Room({ d }: { d: DraftEntry }) {
       </View>
 
       {complete ? null : myTurn ? (
-        <View style={s.banner} testID="on-the-clock">
+        <View style={[s.banner, s.bannerCoil]} testID="on-the-clock">
           <Breath endsAt={state.clockEndsAt} color={c.accent} radius={16} />
           {auto ? null : <ClockClutch endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} />}
           <View style={{ flex: 1 }}>
@@ -249,9 +249,12 @@ function Room({ d }: { d: DraftEntry }) {
             </Text>
           </View>
           <Countdown endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} mine />
+          <View style={s.coil}>
+            <ClockCoil endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} mine />
+          </View>
         </View>
       ) : (
-        <View style={s.banner}>
+        <View style={[s.banner, s.bannerCoil]}>
           {strike ? (
             <Rattler
               key={strike}
@@ -280,6 +283,11 @@ function Room({ d }: { d: DraftEntry }) {
             <View style={s.untilBadge} accessibilityLabel={untilTurn === 1 ? "You're next" : `${untilTurn} picks till you`}>
               <Text style={s.untilNum}>{untilTurn}</Text>
               <Text style={s.untilLabel}>{untilTurn === 1 ? 'pick away' : 'picks away'}</Text>
+            </View>
+          ) : null}
+          {clock ? (
+            <View style={s.coil}>
+              <ClockCoil endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} mine={false} />
             </View>
           ) : null}
         </View>
@@ -499,6 +507,8 @@ const useStyles = makeStyles((c) => ({
     gap: 12,
     backgroundColor: c.surface,
   },
+  bannerCoil: { paddingBottom: 24 },
+  coil: { position: 'absolute', left: 14, right: 14, bottom: 4 },
   upTitle: { fontFamily: fonts.displayHeavy, fontSize: 30, lineHeight: 32, color: c.accent },
   bannerTitle: { ...type.title, color: c.text },
   bannerSub: { ...type.small, color: c.textMuted, marginTop: 1 },
