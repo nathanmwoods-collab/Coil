@@ -398,11 +398,11 @@ function Room({ d }: { d: DraftEntry }) {
               initialNumToRender={14}
               windowSize={7}
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<Empty title="Nobody by that name left." body="Probably gone. Check the board." />}
+              ListEmptyComponent={<Empty art={!myTurn} title="Nobody by that name left." body="Probably gone. Check the board." />}
             />
           </View>
         ) : tab === 'queue' ? (
-          <QueueList queue={d.queue} players={PLAYER_BY_ID} canDraft={myTurn} onMove={onMove} onRemove={onStar} onDraft={onDraft} onOpen={onOpen} />
+          <QueueList queue={d.queue} players={PLAYER_BY_ID} canDraft={myTurn} onMove={onMove} onRemove={onStar} onDraft={onDraft} onOpen={onOpen} quiet={myTurn} />
         ) : tab === 'team' ? (
           <MyTeam state={state} players={PLAYER_BY_ID} />
         ) : (

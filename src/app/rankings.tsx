@@ -151,7 +151,7 @@ export default function RankingsScreen() {
           pool.length ? (
             <Empty art={false} title="Nobody by that name." body="Try a team, a position or a nickname." />
           ) : (
-            <Empty title={`No ${slateInfo(kind).label} players yet.`} body="This list opens when the slate does." />
+            <Empty art={false} title={`No ${slateInfo(kind).label} players yet.`} body="This list opens when the slate does." />
           )
         }
         renderItem={({ item }) => (

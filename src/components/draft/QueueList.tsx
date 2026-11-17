@@ -16,6 +16,7 @@ export const QueueList = memo(function QueueList({
   onRemove,
   onDraft,
   onOpen,
+  quiet,
 }: {
   queue: string[];
   players: Map<string, Player>;
@@ -24,6 +25,8 @@ export const QueueList = memo(function QueueList({
   onRemove: (id: string) => void;
   onDraft: (id: string) => void;
   onOpen?: (id: string) => void;
+  /** Clutch is already on screen (you're up): no second one in the empty state. */
+  quiet?: boolean;
 }) {
   const s = useStyles();
   const c = useColors();
@@ -33,7 +36,7 @@ export const QueueList = memo(function QueueList({
       keyExtractor={(id) => id}
       contentContainerStyle={{ paddingBottom: 32 }}
       ListHeaderComponent={queue.length ? <Text style={s.hint}>Top of the queue goes first.</Text> : undefined}
-      ListEmptyComponent={<Empty title="Queue's empty." body="Flag a few guys. If the clock beats you, autopick starts here." />}
+      ListEmptyComponent={<Empty art={!quiet} title="Queue's empty." body="Flag a few guys. If the clock beats you, autopick starts here." />}
       renderItem={({ item: id, index }) => {
         const p = players.get(id);
         if (!p) return null;

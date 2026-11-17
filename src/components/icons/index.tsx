@@ -156,13 +156,3 @@ export const TabIcon = memo(function TabIcon({
     </Svg>
   );
 });
-
-/** Empty-state art: the logo path let loose into a flat line, the mint dot off to the side. */
-export const UnwoundLine = memo(function UnwoundLine({ color, dot, width = 168 }: { color: string; dot: string; width?: number }) {
-  return (
-    <Svg width={width} height={44} viewBox="0 0 168 44">
-      <Stroke d="M6 30c10-14 22-14 30-4s20 10 30 0 26-6 42 0 26 2 36-2" color={color} strokeWidth={2} />
-      <Circle cx={158} cy={14} r={5} fill={dot} />
-    </Svg>
-  );
-});

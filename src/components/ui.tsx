@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Pressable,
@@ -16,7 +16,9 @@ import { feel } from '../lib/feel';
 import { motion, NATIVE_DRIVER, useReducedMotion } from '../theme/motion';
 import { fonts, type } from '../theme/type';
 import { makeStyles, useColors } from '../theme/useTheme';
-import { Alert, UnwoundLine } from './icons';
+import { Alert } from './icons';
+import { Rattler } from './Rattler';
+import { SnakeFill } from './SnakeFill';
 
 export const HIT = 44;
 
@@ -320,14 +322,14 @@ export function Card({ children, style, onPress, testID }: { children: ReactNode
   );
 }
 
-/** Empty state: the logo path let loose, the mint dot waiting off to the side. */
+/** Empty state: Clutch asleep. Nothing here yet, nothing to rattle about. */
 export function Empty({ title, body, action, art = true }: { title: string; body?: string; action?: ReactNode; art?: boolean }) {
   const c = useColors();
   return (
-    <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingVertical: 40, gap: 10 }}>
+    <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingVertical: 40, gap: 10 }} testID="empty-state">
       {art ? (
-        <View style={{ marginBottom: 6 }}>
-          <UnwoundLine color={c.border} dot={c.accent} />
+        <View style={{ marginBottom: 2 }}>
+          <Rattler pose="asleep" size={84} opacity={0.6} />
         </View>
       ) : null}
       <Text style={[type.display24, { color: c.text, textAlign: 'center' }]}>{title}</Text>
@@ -337,26 +339,32 @@ export function Empty({ title, body, action, art = true }: { title: string; body
   );
 }
 
-/** Loading state: "Winding up…" with the mint dot breathing. */
+const WIND_MS = 1100;
+
+/**
+ * Loading: Clutch above a coil that winds up, over and over. No ellipsis;
+ * the motion is the ellipsis. Past 4 seconds the line admits it.
+ */
 export function WindingUp() {
   const c = useColors();
   const reduced = useReducedMotion();
-  const v = useRef(new Animated.Value(0.35)).current;
+  const [t, setT] = useState(0);
+  const start = useRef(Date.now()).current;
   useEffect(() => {
-    if (reduced) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(v, { toValue: 1, duration: 600, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(v, { toValue: 0.35, duration: 600, useNativeDriver: NATIVE_DRIVER }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduced, v]);
+    const id = setInterval(() => setT(Date.now() - start), reduced ? 500 : 40);
+    return () => clearInterval(id);
+  }, [reduced, start]);
+  const k = reduced ? 0.6 : motion.wind.easing((t % WIND_MS) / WIND_MS);
+  const slow = t > 4000;
   return (
-    <View style={{ alignItems: 'center', paddingVertical: 64, gap: 14 }} accessibilityLabel="Winding up">
-      <Animated.View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.accent, opacity: reduced ? 1 : v }} />
-      <Text style={[type.display24, { color: c.textMuted }]}>Winding up…</Text>
+    <View style={{ alignItems: 'center', paddingVertical: 64, gap: 14 }} accessibilityLabel="Winding up" testID="winding-up">
+      <Rattler pose="resting" size={56} animate={false} />
+      <View style={{ width: 160 }}>
+        <SnakeFill value={k} color={c.accent} track={c.border} height={16} amp={4} period={30} />
+      </View>
+      <Text style={[type.display24, { color: c.textMuted, textAlign: 'center', paddingHorizontal: 32 }]}>
+        {slow ? "Still winding. The servers are in the trainer's tent." : 'Winding up'}
+      </Text>
     </View>
   );
 }
