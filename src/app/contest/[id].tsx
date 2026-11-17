@@ -34,7 +34,7 @@ export default function ContestDetail() {
   if (!contest) {
     return (
       <Screen>
-        <Empty title="That contest's gone." action={<Button label="Back to the lobby" onPress={() => router.back()} />} />
+        <Empty title="That contest's gone." action={<Button label="Back to the lobby" onPress={() => router.replace('/')} />} />
       </Screen>
     );
   }
@@ -73,10 +73,10 @@ export default function ContestDetail() {
     setError(null);
     // One hand-drafted entry goes straight to the room. Anything else lands on the Drafts tab.
     if (mode === 'self' && r.draftIds.length === 1) router.replace(`/draft/${r.draftId}`);
-    else {
+    else if (router.canGoBack()) {
       router.back();
       router.navigate('/drafts');
-    }
+    } else router.replace('/drafts');
   };
 
   const cta = atMax

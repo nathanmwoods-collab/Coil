@@ -300,10 +300,14 @@ function LiveView({ teams, week, sel, empty, season }: { teams: LiveTeam[]; week
             <Text style={s.ovSeason}>{season}</Text>
             <Text style={s.ovWeek}>{weekLine} · mock</Text>
           </View>
-          <View style={s.ovStats}>
-            <Stat label="Entries" value={String(sum.entries)} />
-            <Stat label="Paid in" value={formatMoney(sum.atStake)} />
-            <Stat label="On pace for" value={formatMoney(sum.winning)} />
+          <View>
+            <Text style={[s.statValue, { color: sum.winning ? c.accent : c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+              {formatMoney(sum.winning)}
+              <Text style={s.onPace}>{sum.winning ? ' on pace' : ' so far'}</Text>
+            </Text>
+            <Text style={s.ovSub}>
+              {sum.entries} {sum.entries === 1 ? 'entry' : 'entries'} · {formatMoney(sum.atStake)} paid in (mock)
+            </Text>
           </View>
           <SnakeFill value={Math.min(1, week / SEASON_WEEKS)} color={c.primary} track={c.border} humps={SEASON_WEEKS} amp={4} height={16} />
         </View>
@@ -370,18 +374,6 @@ function LiveView({ teams, week, sel, empty, season }: { teams: LiveTeam[]; week
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  const s = useStyles();
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text style={s.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const useStyles = makeStyles((c) => ({
   header: { padding: 16, paddingBottom: 0, gap: 8 },
   title: { ...type.display40, color: c.text },
@@ -410,9 +402,9 @@ const useStyles = makeStyles((c) => ({
   ovTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   ovSeason: { ...type.title, color: c.text },
   ovWeek: { ...type.micro, color: c.textMuted },
-  ovStats: { flexDirection: 'row', gap: 12 },
+  onPace: { fontFamily: fonts.display, fontSize: 22, color: c.textMuted },
+  ovSub: { ...type.small, color: c.textMuted, marginTop: 2 },
   statValue: { fontFamily: fonts.displayHeavy, fontSize: 34, lineHeight: 36, color: c.text },
-  statLabel: { ...type.micro, color: c.textMuted },
   group: { marginTop: 14, gap: 2 },
   groupName: { ...type.display24, color: c.text },
   exposure: { flexDirection: 'row', alignItems: 'center', minHeight: 44, marginTop: 6, borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.border },

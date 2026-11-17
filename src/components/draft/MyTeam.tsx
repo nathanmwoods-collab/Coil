@@ -62,9 +62,6 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
           <Text style={s.proj}>{Math.round(item.player.projPoints)}</Text>
         </View>
       )}
-      renderSectionFooter={({ section }) =>
-        section.data.length === 0 ? <Text style={s.none}>Open</Text> : null
-      }
     />
   );
 });
@@ -81,5 +78,4 @@ const useStyles = makeStyles((c) => ({
   name: { ...type.bodyStrong, color: c.text },
   meta: { ...type.micro, color: c.textMuted, fontSize: 12 },
   proj: { fontFamily: fonts.mono, fontSize: 13, color: c.text },
-  none: { ...type.micro, color: c.textMuted, fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
 }));

@@ -169,3 +169,14 @@ describe('stack teams token', () => {
     expect(formatTeamName(['stackTeams'], { ...ctx, stackTeams: [] })).toBe('No stack');
   });
 });
+
+describe('hero quip wording', () => {
+  it('does not make a one-round gap sound like a statement', () => {
+    const team = [...'WWWWWRRWQTRWRWQRTW'].map((ch, i) => ({
+      round: i + 1,
+      position: ({ Q: 'QB', R: 'RB', W: 'WR', T: 'TE' } as const)[ch as 'Q' | 'R' | 'W' | 'T'],
+      ...(i === 5 ? { name: 'Omarion Hampton' } : {}),
+    }));
+    expect(buildProfile(team).line).toBe('Hampton in round 6. The only back in the first 6 rounds.');
+  });
+});

@@ -72,7 +72,7 @@ export default function Exposure() {
           </Text>
         ) : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters} style={{ flexGrow: 0 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters} style={{ flexGrow: 0, flexShrink: 0, minHeight: 44 }}>
         {SPORTS.map((sp) => (
           <Chip
             key={sp.key}

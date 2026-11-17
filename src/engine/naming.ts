@@ -111,9 +111,12 @@ export function buildProfile(picks: BuildPick[], rounds = 18): BuildProfile {
     case 'Hero RB': {
       const hero = earlyRbs[0];
       const next = rbs.find((p) => p !== hero);
-      line = next
-        ? `${who(hero, 'One back')} in round ${hero.round}, then no back till round ${next.round}.`
-        : `${who(hero, 'One back')} in round ${hero.round}, and he carries the backfield.`;
+      line =
+        next && next.round - hero.round >= 4
+          ? `${who(hero, 'One back')} in round ${hero.round}, then no back till round ${next.round}.`
+          : next
+            ? `${who(hero, 'One back')} in round ${hero.round}. The only back in the first ${cut} rounds.`
+            : `${who(hero, 'One back')} in round ${hero.round}, and he carries the backfield.`;
       break;
     }
     case 'Robust RB':
