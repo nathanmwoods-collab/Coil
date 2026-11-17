@@ -5,6 +5,8 @@ import { FlatList, LayoutAnimation, Modal, Pressable, Text, TextInput, View } fr
 import { Alert, Check, ChevronLeft, ChevronRight, More } from '../../components/icons';
 import { BoardGrid } from '../../components/draft/BoardGrid';
 import { Breath } from '../../components/draft/Breath';
+import { ClockClutch } from '../../components/draft/ClockClutch';
+import { Rattler } from '../../components/Rattler';
 import { CoilReveal } from '../../components/draft/CoilReveal';
 import { Countdown } from '../../components/draft/Countdown';
 import { MyTeam } from '../../components/draft/MyTeam';
@@ -82,6 +84,8 @@ function Room({ d }: { d: DraftEntry }) {
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [sheetId, setSheetId] = useState<string | null>(null);
+  // Clutch strikes in the banner slot after a pick you made lands (never for autopicks).
+  const [strike, setStrike] = useState(0);
   // After the draft, the reveal leads; the full board is one tap away.
   const [showBoard, setShowBoard] = useState(false);
   const reduced = useReducedMotion();
@@ -160,7 +164,8 @@ function Room({ d }: { d: DraftEntry }) {
     (pid: string) => {
       const err = draftPlayer(d.id, pid);
       if (err === null) {
-        feel.pickIn();
+        // The Rigid haptic fires on Clutch's lunge frame, not on tap.
+        setStrike((n) => n + 1);
         if (!reduced) LayoutAnimation.configureNext(LayoutAnimation.create(180, 'easeInEaseOut', 'opacity'));
       } else {
         feel.pickRejected();
@@ -232,6 +237,7 @@ function Room({ d }: { d: DraftEntry }) {
       {complete ? null : myTurn ? (
         <View style={s.banner} testID="on-the-clock">
           <Breath endsAt={state.clockEndsAt} color={c.accent} radius={16} />
+          {auto ? null : <ClockClutch endsAt={state.clockEndsAt} totalMs={state.config.pickClockSec * 1000} />}
           <View style={{ flex: 1 }}>
             <Text style={s.upTitle}>You're up.</Text>
             <Text style={s.bannerSub} numberOfLines={2}>
@@ -246,6 +252,16 @@ function Room({ d }: { d: DraftEntry }) {
         </View>
       ) : (
         <View style={s.banner}>
+          {strike ? (
+            <Rattler
+              key={strike}
+              pose="strike"
+              size={44}
+              onLunge={feel.pickIn}
+              onDone={() => setTimeout(() => setStrike(0), 260)}
+              testID="clutch-strike"
+            />
+          ) : null}
           <View style={{ flex: 1 }}>
             <Text style={s.bannerTitle} numberOfLines={1}>
               {clock ? `${clock.name} is on the clock` : 'Waiting on the room'}
@@ -256,7 +272,7 @@ function Room({ d }: { d: DraftEntry }) {
                 : untilTurn === null
                   ? "Roster's full. Sit back."
                   : untilTurn === 1
-                    ? "You're next. Get ready."
+                    ? "You're next. Have a name ready."
                     : `${untilTurn} picks till you`}
             </Text>
           </View>
@@ -271,8 +287,8 @@ function Room({ d }: { d: DraftEntry }) {
 
       {d.autopilot && !complete ? (
         <View style={s.autopilot} testID="autopilot-banner">
-          <Alert color={c.warning} size={16} />
-          <Text style={s.autopilotText}>{d.missed} missed in a row. Autopilot's got it, queue first.</Text>
+          <Rattler pose="bust" size={30} />
+          <Text style={s.autopilotText}>{d.missed} missed in a row. Autopilot has the wheel.</Text>
           <Button small variant="secondary" label="Take it back" onPress={() => setAutodraft(d.id, false)} />
         </View>
       ) : null}
@@ -371,7 +387,7 @@ function Room({ d }: { d: DraftEntry }) {
               initialNumToRender={14}
               windowSize={7}
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<Empty title="Nobody by that name left." body="They may already be drafted." />}
+              ListEmptyComponent={<Empty title="Nobody by that name left." body="Probably gone. Check the board." />}
             />
           </View>
         ) : tab === 'queue' ? (

@@ -23,17 +23,32 @@ function run(fn: () => Promise<void>) {
 
 const { ImpactFeedbackStyle: Impact, NotificationFeedbackType: Note } = Haptics;
 
+/** A dry buzz: `ticks` selection taps 45ms apart. */
+function buzz(ticks: number) {
+  for (let i = 0; i < ticks; i++) setTimeout(() => run(() => Haptics.selectionAsync()), i * 45);
+}
+
 export const feel = {
-  /** Your turn starts: a "double knock". */
-  yourTurn() {
-    run(() => Haptics.impactAsync(Impact.Heavy));
-    setTimeout(() => run(() => Haptics.impactAsync(Impact.Rigid)), 120);
+  /**
+   * Coil's signature: the rattle. Six quick ticks, then one Rigid as Clutch
+   * lifts his head. Felt face down, it means "your pick".
+   */
+  rattle() {
+    if (!enabled()) return;
+    buzz(6);
+    setTimeout(() => run(() => Haptics.impactAsync(Impact.Rigid)), 6 * 45 + 120);
   },
-  /** 10 seconds left on your clock. */
-  clockWarning: () => run(() => Haptics.notificationAsync(Note.Warning)),
-  /** Each of the last 3 seconds. */
-  clockTick: () => run(() => Haptics.selectionAsync()),
-  /** Your pick landed. */
+  /** Your turn starts: the rattle. */
+  yourTurn() {
+    feel.rattle();
+  },
+  /** 10 seconds left on your clock: the rattle again, in place of a warning buzz. */
+  clockWarning: () => feel.rattle(),
+  /** Each of the last 3 seconds: a three-tick burst, so the rattle speeds up. */
+  clockTick: () => {
+    if (enabled()) buzz(3);
+  },
+  /** Your pick landed: fired on Clutch's strike frame, not on tap. */
   pickIn: () => run(() => Haptics.impactAsync(Impact.Rigid)),
   /** Pick rejected or the clock beat you. */
   pickRejected: () => run(() => Haptics.notificationAsync(Note.Error)),
