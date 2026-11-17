@@ -9,6 +9,7 @@ import { CoilReveal } from '../../components/draft/CoilReveal';
 import { Countdown } from '../../components/draft/Countdown';
 import { MyTeam } from '../../components/draft/MyTeam';
 import { PickStrip } from '../../components/draft/PickStrip';
+import { PlayerSheet } from '../../components/draft/PlayerSheet';
 import { PLAYER_ROW_HEIGHT, PlayerRow, type StackTag } from '../../components/draft/PlayerRow';
 import { QueueList } from '../../components/draft/QueueList';
 import { Button, Chip, Empty, Screen, Segmented, Tap, WindingUp } from '../../components/ui';
@@ -80,6 +81,7 @@ function Room({ d }: { d: DraftEntry }) {
   const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [sheetId, setSheetId] = useState<string | null>(null);
   // After the draft, the reveal leads; the full board is one tap away.
   const [showBoard, setShowBoard] = useState(false);
   const reduced = useReducedMotion();
@@ -168,6 +170,7 @@ function Room({ d }: { d: DraftEntry }) {
     [draftPlayer, d.id, reduced],
   );
   const onStar = useCallback((pid: string) => toggleQueue(d.id, pid), [toggleQueue, d.id]);
+  const onOpen = useCallback((pid: string) => setSheetId(pid), []);
   const onMove = useCallback((pid: string, dir: -1 | 1) => moveQueue(d.id, pid, dir), [moveQueue, d.id]);
 
   const stackFor = useCallback(
@@ -191,9 +194,10 @@ function Room({ d }: { d: DraftEntry }) {
         adp={adpMap.get(item.id)}
         onDraft={onDraft}
         onStar={onStar}
+        onOpen={onOpen}
       />
     ),
-    [queued, myTurn, stackFor, exposureMap, adpMap, onDraft, onStar],
+    [queued, myTurn, stackFor, exposureMap, adpMap, onDraft, onStar, onOpen],
   );
 
   const auto = d.autodraft || d.autopilot;
@@ -369,13 +373,23 @@ function Room({ d }: { d: DraftEntry }) {
             />
           </View>
         ) : tab === 'queue' ? (
-          <QueueList queue={d.queue} players={PLAYER_BY_ID} canDraft={myTurn} onMove={onMove} onRemove={onStar} onDraft={onDraft} />
+          <QueueList queue={d.queue} players={PLAYER_BY_ID} canDraft={myTurn} onMove={onMove} onRemove={onStar} onDraft={onDraft} onOpen={onOpen} />
         ) : tab === 'team' ? (
           <MyTeam state={state} players={PLAYER_BY_ID} />
         ) : (
           <BoardGrid state={state} players={PLAYER_BY_ID} />
         )}
       </View>
+
+      <PlayerSheet
+        player={sheetId ? PLAYER_BY_ID.get(sheetId) ?? null : null}
+        adp={sheetId ? adpMap.get(sheetId) : undefined}
+        queued={sheetId ? queued.has(sheetId) : false}
+        canDraft={myTurn && !complete}
+        onClose={() => setSheetId(null)}
+        onDraft={onDraft}
+        onQueue={onStar}
+      />
 
       <Modal visible={menu} transparent animationType={reduced ? 'none' : 'fade'} onRequestClose={() => setMenu(false)}>
         <Pressable style={s.scrim} onPress={() => setMenu(false)} accessibilityLabel="Close settings" />

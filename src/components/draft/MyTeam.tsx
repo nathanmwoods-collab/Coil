@@ -8,17 +8,9 @@ import { makeStyles, useColors } from '../../theme/useTheme';
 import { PlayerAvatar } from '../PlayerAvatar';
 import { Empty, PosPill } from '../ui';
 
-/** Typical best-ball build ranges for an 18-round draft, scaled to the draft's rounds. */
-export function rosterTargets(rounds: number): Record<Position, [number, number]> {
-  const k = rounds / 18;
-  const r = (lo: number, hi: number, min: number): [number, number] => [Math.max(min, Math.round(lo * k)), Math.max(min, Math.round(hi * k))];
-  return { QB: r(2, 3, 1), RB: r(5, 7, 2), WR: r(7, 9, 3), TE: r(2, 3, 1) };
-}
-
 export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftState; players: Map<string, Player> }) {
   const s = useStyles();
   const c = useColors();
-  const targets = useMemo(() => rosterTargets(state.config.rounds), [state.config.rounds]);
   const sections = useMemo(() => {
     const picks = rosterOf(state, ME);
     return POSITIONS.map((pos) => ({
@@ -28,7 +20,6 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
         .filter((x): x is { pick: typeof x.pick; player: Player } => !!x.player && x.player.position === pos),
     }));
   }, [state, players]);
-  const total = sections.reduce((n, x) => n + x.data.length, 0);
 
   return (
     <SectionList
@@ -40,15 +31,10 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
         <View style={s.summary}>
           {POSITIONS.map((pos) => {
             const n = sections.find((x) => x.pos === pos)?.data.length ?? 0;
-            const [lo, hi] = targets[pos];
-            const color = n < lo ? c.textMuted : n > hi ? c.warning : c.text;
             return (
               <View key={pos} style={s.sumCell}>
                 <Text style={[s.sumPos, { color: c[pos] }]}>{pos}</Text>
-                <Text style={[s.sumCount, { color }]}>{n}</Text>
-                <Text style={s.sumTarget}>
-                  aim for {lo} to {hi}
-                </Text>
+                <Text style={[s.sumCount, { color: n ? c.text : c.textMuted }]}>{n}</Text>
               </View>
             );
           })}
@@ -58,10 +44,7 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
       renderSectionHeader={({ section }) => (
         <View style={s.sectionHead}>
           <PosPill pos={section.pos} />
-          <Text style={s.sectionText}>
-            {section.data.length} of {targets[section.pos][0]} to {targets[section.pos][1]}
-          </Text>
-          {total === 0 ? null : <View style={{ flex: 1 }} />}
+          <Text style={s.sectionText}>{section.data.length}</Text>
         </View>
       )}
       renderItem={({ item }) => (
@@ -74,7 +57,6 @@ export const MyTeam = memo(function MyTeam({ state, players }: { state: DraftSta
             <Text style={s.name}>{item.player.name}</Text>
             <Text style={s.meta}>
               {item.player.team} · Bye {item.player.bye} · ADP {item.player.adp.toFixed(1)}
-              {item.pick.auto ? ' · autopick' : ''}
             </Text>
           </View>
           <Text style={s.proj}>{Math.round(item.player.projPoints)}</Text>
@@ -92,7 +74,6 @@ const useStyles = makeStyles((c) => ({
   sumCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   sumPos: { ...type.label },
   sumCount: { fontFamily: fonts.display, fontSize: 32, lineHeight: 34 },
-  sumTarget: { ...type.micro, color: c.textMuted, fontSize: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
   sectionText: { ...type.micro, color: c.textMuted, fontSize: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.border + '99' },

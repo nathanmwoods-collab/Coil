@@ -15,6 +15,7 @@ export const QueueList = memo(function QueueList({
   onMove,
   onRemove,
   onDraft,
+  onOpen,
 }: {
   queue: string[];
   players: Map<string, Player>;
@@ -22,6 +23,7 @@ export const QueueList = memo(function QueueList({
   onMove: (id: string, dir: -1 | 1) => void;
   onRemove: (id: string) => void;
   onDraft: (id: string) => void;
+  onOpen?: (id: string) => void;
 }) {
   const s = useStyles();
   const c = useColors();
@@ -31,14 +33,21 @@ export const QueueList = memo(function QueueList({
       keyExtractor={(id) => id}
       contentContainerStyle={{ paddingBottom: 32 }}
       ListHeaderComponent={queue.length ? <Text style={s.hint}>Top of the queue goes first.</Text> : undefined}
-      ListEmptyComponent={<Empty title="Queue's empty." body="Star a few guys. If your clock runs out, autopick starts here." />}
+      ListEmptyComponent={<Empty title="Queue's empty." body="Flag a few guys. If the clock beats you, autopick starts here." />}
       renderItem={({ item: id, index }) => {
         const p = players.get(id);
         if (!p) return null;
         return (
           <View style={s.row}>
             <Text style={s.idx}>{index + 1}</Text>
-            <View style={{ flex: 1, gap: 3 }}>
+            <Tap
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}, news and details`}
+              onPress={onOpen ? () => onOpen(id) : undefined}
+              disabled={!onOpen}
+              scaleTo={0.99}
+              style={{ flex: 1, gap: 3, alignSelf: 'stretch', justifyContent: 'center' }}
+            >
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 <PosPill pos={p.position} small />
                 <Text style={s.name} numberOfLines={1}>
@@ -48,7 +57,7 @@ export const QueueList = memo(function QueueList({
               <Text style={s.meta}>
                 {p.team} · Bye {p.bye} · ADP {p.adp.toFixed(1)}
               </Text>
-            </View>
+            </Tap>
             <IconBtn
               a11y={`Move ${p.name} up`}
               disabled={index === 0}

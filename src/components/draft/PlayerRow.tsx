@@ -6,6 +6,7 @@ import { feel } from '../../lib/feel';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
 import { ArrowDown, ArrowUp, QueueMark } from '../icons';
+import { InjuryTag } from '../InjuryTag';
 import { PlayerAvatar } from '../PlayerAvatar';
 import { PosPill, Tap } from '../ui';
 
@@ -22,6 +23,7 @@ export const PlayerRow = memo(function PlayerRow({
   adp,
   onDraft,
   onStar,
+  onOpen,
 }: {
   player: Player;
   queued: boolean;
@@ -32,6 +34,8 @@ export const PlayerRow = memo(function PlayerRow({
   adp?: number;
   onDraft: (id: string) => void;
   onStar: (id: string) => void;
+  /** Tap the player: news, injury, ADP. */
+  onOpen?: (id: string) => void;
 }) {
   const s = useStyles();
   const c = useColors();
@@ -53,6 +57,14 @@ export const PlayerRow = memo(function PlayerRow({
       >
         <QueueMark color={c.textMuted} filled={queued} fill={c.accent} size={20} />
       </Tap>
+      <Tap
+        accessibilityRole="button"
+        accessibilityLabel={`${player.name}, news and details`}
+        onPress={onOpen ? () => onOpen(player.id) : undefined}
+        disabled={!onOpen}
+        scaleTo={0.99}
+        style={s.open}
+      >
       <PlayerAvatar player={player} size={36} />
       <View style={s.main}>
         <View style={s.nameRow}>
@@ -60,6 +72,7 @@ export const PlayerRow = memo(function PlayerRow({
           <Text style={s.name} numberOfLines={1}>
             {player.name}
           </Text>
+          <InjuryTag playerId={player.id} />
         </View>
         <View style={s.metaRow}>
           <Text style={[s.meta, { flexShrink: 1 }]} numberOfLines={1}>
@@ -73,6 +86,7 @@ export const PlayerRow = memo(function PlayerRow({
           ) : null}
         </View>
       </View>
+      </Tap>
       <View
         style={s.adp}
         accessibilityLabel={`ADP ${shown.toFixed(1)}${move ? `, ${move === 'up' ? 'rising' : 'sliding'} from ${player.adp.toFixed(1)}` : ''}`}
@@ -110,6 +124,7 @@ const useStyles = makeStyles((c) => ({
     backgroundColor: c.bg,
   },
   star: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  open: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' },
   main: { flex: 1, gap: 3, minWidth: 0, marginLeft: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { ...type.bodyStrong, color: c.text, flexShrink: 1 },

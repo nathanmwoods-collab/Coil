@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 /**
  * Coil icon set (personality spec §2.9): one 2px round-cap stroke, drawn in
@@ -79,22 +79,35 @@ export const More = memo(function More({ size = 24, color }: IconProps) {
   );
 });
 
-/** Queue marker: a bookmark notch that fills mint when the player is queued. */
+/**
+ * Queue marker: Clutch's rattle, three fanned segments. Outlined when the
+ * player is not queued; filled mint when he is.
+ */
 export const QueueMark = memo(function QueueMark({
   size = 22,
   color,
   filled,
   fill,
 }: IconProps & { filled?: boolean; fill?: string }) {
+  const ink = filled ? fill ?? color : color;
+  const seg = (x: number, y: number, w: number, h: number, rx: number, rot: number) => (
+    <Rect
+      x={x}
+      y={y}
+      width={w}
+      height={h}
+      rx={rx}
+      transform={`rotate(${rot} ${x + w / 2} ${y + h / 2})`}
+      fill={filled ? ink : 'none'}
+      stroke={ink}
+      strokeWidth={1.8}
+    />
+  );
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z"
-        stroke={filled ? fill ?? color : color}
-        strokeWidth={2}
-        strokeLinejoin="round"
-        fill={filled ? fill ?? color : 'none'}
-      />
+      {seg(3.2, 9.5, 6, 11, 2.6, -20)}
+      {seg(9.6, 7.2, 5.4, 9, 2.4, -40)}
+      {seg(15, 3.6, 4.6, 7, 2.2, -58)}
     </Svg>
   );
 });

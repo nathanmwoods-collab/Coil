@@ -7,19 +7,10 @@ import type { Player } from '../engine';
 import { fonts } from '../theme/type';
 import { useColors } from '../theme/useTheme';
 
-const SUFFIX = /^(jr\.?|sr\.?|ii|iii|iv|v)$/i;
-
-/** "A.J. Brown" -> "AB", "Amon-Ra St. Brown" -> "AB", "Kenneth Walker III" -> "KW". */
-export function initials(name: string): string {
-  const parts = name.split(' ').filter((w) => w && !SUFFIX.test(w));
-  const first = parts[0]?.replace(/[^A-Za-z]/g, '')[0] ?? '';
-  const last = parts.length > 1 ? parts[parts.length - 1].replace(/[^A-Za-z]/g, '')[0] ?? '' : '';
-  return (first + last).toUpperCase();
-}
-
 /**
  * Player headshot when the photo provider has one and it loads; otherwise the
- * player's initials on the team color with a ring in the team's second color.
+ * team's abbreviation (MIN, KC) on the team color with a ring in its second
+ * color. Team, not player, initials: it tells you something at a glance.
  */
 export const PlayerAvatar = memo(function PlayerAvatar({ player, size = 36, dim }: { player: Player; size?: number; dim?: boolean }) {
   const c = useColors();
@@ -35,7 +26,7 @@ export const PlayerAvatar = memo(function PlayerAvatar({ player, size = 36, dim 
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
+        borderRadius: size * 0.32,
         backgroundColor: showPhoto ? c.surfaceAlt : fill,
         borderWidth: 1.5,
         borderColor: ring,
@@ -55,10 +46,16 @@ export const PlayerAvatar = memo(function PlayerAvatar({ player, size = 36, dim 
         />
       ) : (
         <Text
-          style={{ fontFamily: fonts.display, fontSize: Math.round(size * 0.44), lineHeight: size, color: team ? readableOn(fill) : c.textMuted, letterSpacing: 0.3 }}
+          style={{
+            fontFamily: fonts.display,
+            fontSize: Math.round(size * (player.team.length > 2 ? 0.36 : 0.42)),
+            lineHeight: size,
+            color: team ? readableOn(fill) : c.textMuted,
+            letterSpacing: 0.2,
+          }}
           allowFontScaling={false}
         >
-          {initials(player.name)}
+          {player.team}
         </Text>
       )}
     </View>
