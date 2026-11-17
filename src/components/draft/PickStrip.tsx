@@ -2,11 +2,11 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import { Animated, FlatList, Text, View } from 'react-native';
 
 import { slotForPick, totalPicks, type DraftState, type Player } from '../../engine';
-import { ME } from '../../store/useApp';
+import { ME, useApp } from '../../store/useApp';
 import { motion, NATIVE_DRIVER, useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
-import { shortName } from '../ui';
+import { MeBadge, shortName } from '../ui';
 import { Breath } from './Breath';
 
 const W = 92;
@@ -94,6 +94,7 @@ const StripCell = memo(function StripCell({
 }) {
   const s = useStyles();
   const c = useColors();
+  const badge = useApp((st) => st.badge);
   const reduced = useReducedMotion();
   const color = cell.player ? c[cell.player.position] : undefined;
   const fill = useRef(new Animated.Value(cell.player ? 1 : 0)).current;
@@ -128,9 +129,12 @@ const StripCell = memo(function StripCell({
           <Animated.View pointerEvents="none" style={[s.fill, { backgroundColor: color + '2A', opacity: fill }]} />
         ) : null}
         {endsAt !== null ? <Breath endsAt={endsAt} color={c.accent} radius={10} /> : null}
-        <Text style={[s.pickNo, cell.mine && { color: c.primary }]}>
-          {cell.round}.{String(cell.inRound).padStart(2, '0')}
-        </Text>
+        <View style={s.topRow}>
+          <Text style={[s.pickNo, cell.mine && { color: c.primary }]}>
+            {cell.round}.{String(cell.inRound).padStart(2, '0')}
+          </Text>
+          {cell.mine ? <MeBadge color={badge.color} tag={badge.tag} size={14} /> : null}
+        </View>
         {cell.player ? (
           <>
             <Text style={s.player} numberOfLines={1}>
@@ -160,6 +164,7 @@ const useStyles = makeStyles((c) => ({
   fill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
   mine: { backgroundColor: c.primary + '1F', borderWidth: 1, borderColor: c.primary + '55' },
   current: { borderWidth: 1, borderColor: c.textMuted },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 10 },
   pickNo: { fontFamily: fonts.mono, fontSize: 10, color: c.textMuted },
   player: { ...type.smallStrong, color: c.text, lineHeight: 16 },
   sub: { ...type.label, fontSize: 10, color: c.textMuted, lineHeight: 12 },

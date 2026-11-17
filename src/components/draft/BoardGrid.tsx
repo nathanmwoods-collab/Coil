@@ -2,9 +2,9 @@ import { memo, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { DraftState, Player } from '../../engine';
-import { ME } from '../../store/useApp';
+import { ME, useApp } from '../../store/useApp';
 import { PlayerAvatar } from '../PlayerAvatar';
-import { PosPill, shortName, Tap } from '../ui';
+import { MeBadge, PosPill, shortName, Tap } from '../ui';
 import { useReducedMotion } from '../../theme/motion';
 import { fonts, type } from '../../theme/type';
 import { makeStyles, useColors } from '../../theme/useTheme';
@@ -25,6 +25,7 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
   const current = state.status === 'drafting' ? state.picks.length + 1 : -1;
   const width = 36 + CELL_W * teams;
   const [who, setWho] = useState<string | null>(null);
+  const badge = useApp((st) => st.badge);
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width }}>
@@ -41,9 +42,16 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
               style={[s.head, e.id === ME && s.headMine]}
               testID={`board-head-${e.id}`}
             >
-              <Text style={[s.headText, e.id === ME && { color: c.primary }]} numberOfLines={1}>
-                {e.id === ME ? 'You' : e.name}
-              </Text>
+              {e.id === ME ? (
+                <View style={s.headMe}>
+                  <MeBadge color={badge.color} tag={badge.tag} size={16} />
+                  <Text style={[s.headText, { color: c.primary }]}>You</Text>
+                </View>
+              ) : (
+                <Text style={s.headText} numberOfLines={1}>
+                  {e.name}
+                </Text>
+              )}
             </Tap>
           ))}
         </View>
@@ -78,6 +86,11 @@ export const BoardGrid = memo(function BoardGrid({ state, players }: { state: Dr
                           <Text style={s.cellName} numberOfLines={1}>
                             {shortName(pl.name)}
                           </Text>
+                          {e.id === ME ? (
+                            <View style={s.cellBadge}>
+                              <MeBadge color={badge.color} tag={badge.tag} size={12} />
+                            </View>
+                          ) : null}
                           <Text style={[s.cellSub, { color: col }]}>
                             {pl.position} {pl.team}
                           </Text>
@@ -158,6 +171,8 @@ const useStyles = makeStyles((c) => ({
   headerRow: { flexDirection: 'row', height: 34, borderBottomWidth: 1, borderBottomColor: c.border },
   head: { width: CELL_W, justifyContent: 'center', paddingHorizontal: 4 },
   headMine: { backgroundColor: c.primary + '22' },
+  headMe: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  cellBadge: { position: 'absolute', top: 3, right: 3 },
   headText: { ...type.label, color: c.textMuted, fontSize: 10, textAlign: 'center' },
   roundCol: { width: 36, alignItems: 'center', justifyContent: 'center' },
   roundText: { fontFamily: fonts.mono, color: c.textMuted, fontSize: 12 },

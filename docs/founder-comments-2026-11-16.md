@@ -34,3 +34,13 @@ Nathan left these 23 comments while tapping through the preview. Location = the 
 21. "$10" mock fees — No fees shown here.
 22. Notifications should be here for preferences (on the clock, draft filled, Springback landed, news on my players; toggles, stored locally).
 23. "How could we personalize the icon when you are drafting?" — Question: answer in the report (e.g. user picks a Rattler skin/color or initials badge shown as their avatar in the pick strip/board; maybe earned skins via Springback gauges). Implement a simple version: choose your avatar color + 2-letter tag, shown on your picks in the strip and board.
+
+## Answer to 23: personalizing your mark while drafting
+
+Shipped now (simple version): in You, pick a badge colour (six from the palette) and a two-letter tag. The badge marks your picks in the pick strip and your column and cells on the board, so you can find yourself at a glance in a 12-wide grid. Stored on the device.
+
+Where it could go, in order of value:
+1. **Clutch skins as the badge.** Your mark becomes a tiny Rattler in your colour (the `line` variant at 16px), not just letters. Same six shapes, only the body colour changes, so it stays on-brand.
+2. **Earned, not bought.** Extra colours and a rattle pattern unlock from Springback gauge tiers (reach Coiled, unlock a colour). Never sold, never tied to deposits, in line with "Clutch does not celebrate spending".
+3. **Seen by the room.** In real multiplayer pods, other drafters see your badge in the strip and board, which makes the room feel populated by people, not usernames.
+Do not: let users upload images (moderation cost) or let badges animate (one moving thing per screen).

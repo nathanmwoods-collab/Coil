@@ -39,6 +39,30 @@ import {
 } from '../engine';
 
 export const ME = 'me';
+
+export interface NotifyPrefs {
+  onClock: boolean;
+  filled: boolean;
+  springback: boolean;
+  news: boolean;
+}
+
+export const DEFAULT_NOTIFY: NotifyPrefs = { onClock: true, filled: true, springback: true, news: false };
+
+/** Your drafter badge: a colour and a two-letter tag. */
+export interface DrafterBadge {
+  color: string;
+  tag: string;
+}
+
+export const BADGE_COLORS = ['#7C5CFF', '#2EE6C5', '#FF6B9A', '#FFA24C', '#5AB0FF', '#F4F3FF'] as const;
+export const DEFAULT_BADGE: DrafterBadge = { color: BADGE_COLORS[0], tag: 'ME' };
+
+/** Two letters or digits, upper case. Empty input falls back to the default tag. */
+export function cleanTag(raw: string): string {
+  const t = raw.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase();
+  return t || DEFAULT_BADGE.tag;
+}
 export const STARTING_BALANCE = 1000;
 /** After this many expired clocks in a row the user is put on autopilot. */
 export const MISSES_FOR_AUTOPILOT = 2;
@@ -156,6 +180,12 @@ interface AppState {
   brandOverride: string | null;
   /** Draft-room haptics. On by default; the OS setting still wins. */
   haptics: boolean;
+  /** Notification preferences. Stored on this device only; nothing sends push in the preview. */
+  notify: NotifyPrefs;
+  setNotify: (key: keyof NotifyPrefs, on: boolean) => void;
+  /** How your picks are marked in the pick strip and on the board. */
+  badge: DrafterBadge;
+  setBadge: (b: Partial<DrafterBadge>) => void;
 
   /** The one-time first-deposit match has been paid out. */
   matchUsed: boolean;
@@ -318,6 +348,8 @@ const initial = {
   botSpeed: 'normal' as BotSpeed,
   brandOverride: null as string | null,
   haptics: true,
+  notify: DEFAULT_NOTIFY,
+  badge: DEFAULT_BADGE,
   matchUsed: false,
   currentWeek: DEFAULT_WEEK,
   adp: {} as Partial<Record<DraftType, AdpTable>>,
@@ -540,6 +572,14 @@ export const useApp = create<AppState>()(
       setBotSpeed: (botSpeed) => set({ botSpeed }),
       setBrandOverride: (brandOverride) => set({ brandOverride }),
       setHaptics: (haptics) => set({ haptics }),
+      setNotify: (key, on) => set((s) => ({ notify: { ...DEFAULT_NOTIFY, ...s.notify, [key]: on } })),
+      setBadge: (b) =>
+        set((s) => ({
+          badge: {
+            color: b.color && (BADGE_COLORS as readonly string[]).includes(b.color) ? b.color : s.badge.color,
+            tag: b.tag !== undefined ? cleanTag(b.tag) : s.badge.tag,
+          },
+        })),
       resetAll: () => set({ ...initial }),
 
       tick: (now) => {
@@ -588,6 +628,8 @@ export const useApp = create<AppState>()(
         botSpeed: s.botSpeed,
         brandOverride: s.brandOverride,
         haptics: s.haptics,
+        notify: s.notify,
+        badge: s.badge,
         matchUsed: s.matchUsed,
         rankings: s.rankings,
         currentWeek: s.currentWeek,

@@ -370,3 +370,24 @@ export function MockNote({ text = 'Mock currency only. No real money.' }: { text
     </View>
   );
 }
+
+/** Your drafter badge: your colour and two-letter tag, on your picks in the strip and board. */
+export const MeBadge = memo(function MeBadge({ color, tag, size = 18 }: { color: string; tag: string; size?: number }) {
+  const ink = readableInk(color);
+  return (
+    <View
+      accessibilityLabel={`You, ${tag}`}
+      style={{ minWidth: size, height: size, paddingHorizontal: 3, borderRadius: size * 0.3, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Text allowFontScaling={false} style={{ fontFamily: fonts.display, fontSize: size * 0.62, lineHeight: size, color: ink, letterSpacing: 0.3 }}>
+        {tag}
+      </Text>
+    </View>
+  );
+});
+
+function readableInk(hex: string) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.6 ? '#0B0B14' : '#FFFFFF';
+}

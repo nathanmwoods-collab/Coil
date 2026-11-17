@@ -349,3 +349,21 @@ describe('Springback', () => {
     expect(springbackPending(get().sbLedger)).toBeCloseTo(25 * 0.04 + 2 * 0.08, 6);
   });
 });
+
+describe('You: notifications and drafter badge', () => {
+  it('stores notification preferences', () => {
+    expect(get().notify.onClock).toBe(true);
+    get().setNotify('news', true);
+    get().setNotify('onClock', false);
+    expect(get().notify).toMatchObject({ news: true, onClock: false, filled: true, springback: true });
+  });
+
+  it('keeps the badge to a known colour and two letters', () => {
+    get().setBadge({ color: '#FF6B9A', tag: 'nk!x' });
+    expect(get().badge).toEqual({ color: '#FF6B9A', tag: 'NK' });
+    get().setBadge({ color: '#123456' });
+    expect(get().badge.color).toBe('#FF6B9A');
+    get().setBadge({ tag: '  ' });
+    expect(get().badge.tag).toBe('ME');
+  });
+});
