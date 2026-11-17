@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Check, Close } from '../../components/icons';
+import { SnakeFill } from '../../components/SnakeFill';
 import { SpringGlyph } from '../../components/SpringGauge';
 import { Button, clockLabel, Empty, formatCents, formatMoney, MockNote, Screen, Tap } from '../../components/ui';
 import { isSitAndGo } from '../../data';
@@ -115,8 +116,17 @@ export default function ContestDetail() {
           </View>
         </View>
 
+        <View style={{ gap: 6 }} testID="contest-seats">
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={s.label}>Seats gone</Text>
+            <Text style={s.seatsNum}>
+              {filled.toLocaleString()} of {contest.maxEntries.toLocaleString()}
+            </Text>
+          </View>
+          <SnakeFill value={filled / contest.maxEntries} color={c.accent} track={c.border} height={18} amp={4} />
+        </View>
+
         <View style={s.facts}>
-          <Fact label="Seats taken" value={`${filled.toLocaleString()} of ${contest.maxEntries.toLocaleString()}`} />
           <Fact label="Your entries" value={`${mine} of ${contest.maxPerUser}`} highlight={mine > 0} />
           <Fact label="Coil's rake" value={`${contest.rakePct}% · ${formatCents(rakeEach)} of each ${formatMoney(contest.entryFee)}`} testID="contest-rake" />
         </View>
@@ -298,6 +308,7 @@ const useStyles = makeStyles((c) => ({
   meta: { ...type.small, color: c.textMuted },
   hero: { flexDirection: 'row', alignItems: 'flex-end' },
   label: { ...type.micro, color: c.textMuted },
+  seatsNum: { fontFamily: fonts.mono, fontSize: 12, color: c.text },
   prize: { fontFamily: fonts.displayHeavy, fontSize: 48, lineHeight: 50, color: c.text },
   fee: { fontFamily: fonts.display, fontSize: 32, lineHeight: 34, color: c.text },
   facts: { borderTopWidth: 1, borderTopColor: c.border },

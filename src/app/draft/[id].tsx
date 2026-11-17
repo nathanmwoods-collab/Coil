@@ -8,6 +8,7 @@ import { Breath } from '../../components/draft/Breath';
 import { ClockClutch } from '../../components/draft/ClockClutch';
 import { Rattler } from '../../components/Rattler';
 import { CoilReveal } from '../../components/draft/CoilReveal';
+import { DraftCoil } from '../../components/draft/DraftCoil';
 import { ClockCoil, Countdown } from '../../components/draft/Countdown';
 import { MyTeam } from '../../components/draft/MyTeam';
 import { PickStrip } from '../../components/draft/PickStrip';
@@ -218,9 +219,11 @@ function Room({ d }: { d: DraftEntry }) {
           <Text style={s.contestName} numberOfLines={1}>
             {contest?.name ?? 'Draft'}
           </Text>
-          <Text style={s.sub}>
-            {complete ? `${total} picks in the books` : `Round ${roundOf(current, state.config.teams)} of ${state.config.rounds} · pick ${current} of ${total}`}
-          </Text>
+          {complete ? (
+            <Text style={s.sub}>{`${total} picks in the books`}</Text>
+          ) : (
+            <DraftCoil state={state} label={`R${roundOf(current, state.config.teams)} · ${current}/${total}`} />
+          )}
         </View>
         {d.autodraft && !complete ? (
           <View style={s.autoChip}>

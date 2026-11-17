@@ -4,6 +4,7 @@ import { FlatList, SectionList, Text, View } from 'react-native';
 
 import { Check, ChevronRight } from '../../components/icons';
 import { SnakeFill } from '../../components/SnakeFill';
+import { DraftCoil } from '../../components/draft/DraftCoil';
 import { Button, Card, Chip, Empty, formatMoney, formatPts, ordinal, relativeDay, Screen, Segmented, Tap } from '../../components/ui';
 import { SEASON_WEEKS, SPORTS } from '../../data';
 import { groupBy, type Sport, liveSummary, onTheClock, picksUntilTurn, POSITIONS, totalPicks } from '../../engine';
@@ -182,17 +183,19 @@ function ActiveRow({ d }: { d: DraftEntry }) {
   const mine = onTheClock(d.state)?.id === ME;
   const until = picksUntilTurn(d.state, ME);
   const total = totalPicks(d.state.config);
-  const hands = d.background ? 'Autodrafting from your rankings' : d.autodraft || d.autopilot ? 'Autopilot on' : null;
+  const hands = d.background ? 'Your list is driving' : d.autodraft || d.autopilot ? 'Autopilot on' : null;
   return (
     <Card onPress={() => router.push(`/draft/${d.id}`)} style={[s.row, mine && !d.background && { borderWidth: 1, borderColor: c.accent }]} testID={`active-${d.id}`}>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={s.name} numberOfLines={1}>
           {contest?.name ?? 'Draft'} · {teamName(d)}
         </Text>
-        <Text style={s.meta}>
-          {d.state.status === 'filling' ? 'Finding drafters…' : `Pick ${d.state.picks.length + 1} of ${total}`}
-          {hands ? ` · ${hands}` : ''}
-        </Text>
+        {d.state.status === 'filling' ? (
+          <Text style={s.meta}>Finding drafters</Text>
+        ) : (
+          <DraftCoil state={d.state} compact label={`${d.state.picks.length + 1}/${total}`} />
+        )}
+        {hands ? <Text style={s.meta}>{hands}</Text> : null}
       </View>
       {d.background ? null : (
         <Text style={[s.status, { color: mine ? c.accent : c.textMuted }]}>
@@ -302,7 +305,7 @@ function LiveView({ teams, week, sel, empty, season }: { teams: LiveTeam[]; week
             <Stat label="At stake" value={formatMoney(sum.atStake)} />
             <Stat label="Winning" value={formatMoney(sum.winning)} />
           </View>
-          <SnakeFill value={Math.min(1, week / SEASON_WEEKS)} color={c.primary} track={c.border} />
+          <SnakeFill value={Math.min(1, week / SEASON_WEEKS)} color={c.primary} track={c.border} humps={SEASON_WEEKS} amp={4} height={16} />
         </View>
       }
       renderSectionHeader={({ section }) => (
